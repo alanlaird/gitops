@@ -1,0 +1,5 @@
+creation_rules:
+  # k8s Secret manifests: encrypt only data/stringData, keep metadata diffable
+  - path_regex: .*\.sops\.ya?ml$
+    encrypted_regex: ^(data|stringData)$
+    age: age1adrjn5x90yz0rkxfya8cwf0pl3x9syyukpfj2u4xsawaf6x40pxsnqc338
