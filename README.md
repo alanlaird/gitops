@@ -13,7 +13,7 @@ ansible-homelab. Summary below.
 |----------------|-----------------------|-------|
 | **taloshw**    | prod pair — hardware  | Bare-metal OptiPlex; NFS to agate; MetalLB on LAN |
 | **talos4**     | prod pair — VM        | The expansion lever — grow workers as capacity demands |
-| **talos5154**  | ephemeral test        | Normally powered off; stood up to test big changes |
+| **talos5**     | ephemeral test        | Formerly talos5154; any number of 5x nodes; normally powered off |
 
 Cluster names are node/address blocks (talos4 = talos41–44 at
 172.16.16.4x), not roles. Roles float.
