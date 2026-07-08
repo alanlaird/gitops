@@ -20,10 +20,17 @@ repoServer:
     - name: SOPS_AGE_KEY_FILE
       value: /sops/age/keys.txt
   initContainers:
+    # The ksops image is distroless (no shell, no cp), so a static busybox
+    # is seeded first and used to copy the ksops binary out.
+    - name: seed-busybox
+      image: busybox:stable-musl
+      command: ["cp", "/bin/busybox", "/custom-tools/busybox"]
+      volumeMounts:
+        - mountPath: /custom-tools
+          name: custom-tools
     - name: install-ksops
       image: viaductoss/ksops:v4.4.0
-      command: ["/bin/sh", "-c"]
-      args: ["cp /usr/local/bin/ksops /custom-tools/"]
+      command: ["/custom-tools/busybox", "cp", "/usr/local/bin/ksops", "/custom-tools/ksops"]
       volumeMounts:
         - mountPath: /custom-tools
           name: custom-tools
