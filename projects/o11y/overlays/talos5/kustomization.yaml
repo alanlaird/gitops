@@ -1,0 +1,12 @@
+# talos5 — ephemeral test cluster. No ingress component, no persistence
+# (the cluster's normal state is destroyed), 24h retention, everything
+# single-replica. This overlay exists to prove the pattern, not to keep data.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: argocd
+resources:
+  - ../../base
+patches:
+  - path: values/loki.yaml
+  - path: values/prometheus.yaml
+  - path: values/monitoring.yaml

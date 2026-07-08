@@ -1,0 +1,41 @@
+# ArgoCD on talos5 (ephemeral test cluster) — lean single-replica install.
+# SOPS integration choice (gitops-migration.md Phase 1.4): KSOPS.
+# The repo is kustomize-first, so decryption happens inside kustomize build:
+# a ksops exec-plugin binary in the repo-server + the age key mounted from
+# the sops-age Secret. No AVP sidecars, no helm-secrets wrapper.
+
+dex:
+  enabled: false          # single operator, local admin login is fine
+notifications:
+  enabled: false          # ntfy/gatus own alerting in this homelab
+
+configs:
+  cm:
+    kustomize.buildOptions: --enable-alpha-plugins --enable-exec
+  params:
+    server.insecure: true # UI via port-forward; TLS adds nothing here
+
+repoServer:
+  env:
+    - name: SOPS_AGE_KEY_FILE
+      value: /sops/age/keys.txt
+  initContainers:
+    - name: install-ksops
+      image: viaductoss/ksops:v4.4.0
+      command: ["/bin/sh", "-c"]
+      args: ["cp /usr/local/bin/ksops /custom-tools/"]
+      volumeMounts:
+        - mountPath: /custom-tools
+          name: custom-tools
+  volumes:
+    - name: custom-tools
+      emptyDir: {}
+    - name: sops-age
+      secret:
+        secretName: sops-age
+  volumeMounts:
+    - mountPath: /usr/local/bin/ksops
+      name: custom-tools
+      subPath: ksops
+    - mountPath: /sops/age
+      name: sops-age

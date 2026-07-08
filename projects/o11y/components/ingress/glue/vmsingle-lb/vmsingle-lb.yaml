@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: vmsingle-database-lb
+  namespace: victoriametrics
+spec:
+  type: LoadBalancer
+  selector:
+    app.kubernetes.io/name: vmsingle
+    app.kubernetes.io/instance: database
+    managed-by: vm-operator
+  ports:
+    - name: http
+      port: 8429
+      targetPort: 8429

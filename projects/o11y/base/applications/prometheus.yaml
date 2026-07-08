@@ -1,0 +1,52 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: prometheus
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+spec:
+  project: default
+  source:
+    repoURL: https://prometheus-community.github.io/helm-charts
+    chart: kube-prometheus-stack
+    targetRevision: 72.3.0
+    helm:
+      # Cluster-neutral defaults. Overlays must patch: grafana exposure
+      # (ingress/LB), storage + retention, and the CP endpoint IPs for
+      # kubeEtcd/kubeControllerManager/kubeScheduler.
+      values: |
+        grafana:
+          service:
+            type: ClusterIP
+          adminPassword: admin
+          sidecar:
+            dashboards:
+              enabled: true
+              defaultDashboardsEnabled: true
+          datasources:
+            datasources.yaml:
+              apiVersion: 1
+              datasources:
+                - name: Loki
+                  type: loki
+                  url: http://loki.loki.svc:3100
+                - name: VictoriaMetrics
+                  type: prometheus
+                  url: http://vmsingle-database.victoriametrics.svc:8429
+                - name: Tempo
+                  type: tempo
+                  url: http://tempo.tempo.svc:3100
+                - name: Phlare
+                  type: phlare
+                  url: http://phlare.phlare.svc:4100
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: prometheus
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

@@ -1,0 +1,47 @@
+# talos5 — everything this cluster runs. Applied once by hand
+# (kubectl apply -f), reconciled by Argo from then on.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argocd
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://argoproj.github.io/argo-helm
+      chart: argo-cd
+      targetRevision: 10.1.2
+      helm:
+        releaseName: argocd
+        valueFiles:
+          - $values/projects/argocd/values-talos5.yaml
+    - repoURL: https://github.com/alanlaird/gitops
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    # Deliberately manual: Argo upgrading itself should be a chosen moment,
+    # not a background surprise on an ephemeral cluster.
+    syncOptions:
+      - ServerSideApply=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: o11y
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/alanlaird/gitops
+    targetRevision: main
+    path: projects/o11y/overlays/talos5
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

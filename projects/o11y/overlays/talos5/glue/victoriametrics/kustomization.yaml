@@ -1,0 +1,15 @@
+# talos5 VMSingle: ephemeral storage, 1d retention.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../../base/glue/victoriametrics
+patches:
+  - target:
+      kind: VMSingle
+      name: database
+    patch: |-
+      - op: replace
+        path: /spec/retentionPeriod
+        value: "1d"
+      - op: remove
+        path: /spec/storage
