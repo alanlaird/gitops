@@ -1,0 +1,74 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: prometheus
+  namespace: argocd
+spec:
+  source:
+    helm:
+      values: |
+        grafana:
+          service:
+            type: ClusterIP
+          ingress:
+            enabled: true
+            hosts:
+              - grafana.laird.net
+            ingressClassName: nginx
+          adminPassword: admin
+          sidecar:
+            dashboards:
+              enabled: true
+              defaultDashboardsEnabled: true
+          datasources:
+            datasources.yaml:
+              apiVersion: 1
+              datasources:
+                - name: Loki
+                  type: loki
+                  url: http://loki.loki.svc:3100
+                - name: VictoriaMetrics
+                  type: prometheus
+                  url: http://vmsingle-database.victoriametrics.svc:8429
+                - name: VictoriaMetrics (myrtle)
+                  type: prometheus
+                  url: http://172.16.11.40:8428
+                - name: Tempo
+                  type: tempo
+                  url: http://tempo.tempo.svc:3100
+                - name: Phlare
+                  type: phlare
+                  url: http://phlare.phlare.svc:4100
+        prometheus:
+          prometheusSpec:
+            storageSpec:
+              volumeClaimTemplate:
+                spec:
+                  storageClassName: nfs-agate
+                  accessModes: [ReadWriteOnce]
+                  resources:
+                    requests:
+                      storage: 20Gi
+        alertmanager:
+          alertmanagerSpec:
+            storage:
+              volumeClaimTemplate:
+                spec:
+                  storageClassName: nfs-agate
+                  accessModes: [ReadWriteOnce]
+                  resources:
+                    requests:
+                      storage: 2Gi
+        # talos4: single CP at 172.16.16.41
+        kubeEtcd:
+          endpoints:
+            - 172.16.16.41
+          service:
+            port: 2381
+            targetPort: 2381
+        kubeControllerManager:
+          endpoints:
+            - 172.16.16.41
+        kubeScheduler:
+          endpoints:
+            - 172.16.16.41

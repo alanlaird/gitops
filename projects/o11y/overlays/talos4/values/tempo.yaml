@@ -1,0 +1,13 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: tempo
+  namespace: argocd
+spec:
+  source:
+    helm:
+      values: |
+        persistence:
+          enabled: true
+          storageClassName: nfs-agate
+          size: 10Gi

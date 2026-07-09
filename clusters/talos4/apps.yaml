@@ -1,0 +1,49 @@
+# talos4 — everything this cluster runs. Applied once by hand
+# (kubectl apply -f), reconciled by Argo from then on.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argocd
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://argoproj.github.io/argo-helm
+      chart: argo-cd
+      # Pinned to the version helm-installed at bootstrap — Argo adopts the
+      # running release in place. Upgrades are a deliberate bump here.
+      targetRevision: 9.4.10
+      helm:
+        releaseName: argocd
+        valueFiles:
+          - $values/projects/argocd/values-talos4.yaml
+    - repoURL: https://github.com/alanlaird/gitops
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    # Deliberately manual: Argo upgrading itself should be a chosen moment,
+    # not a background surprise on a prod-pair member.
+    syncOptions:
+      - ServerSideApply=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: o11y
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/alanlaird/gitops
+    targetRevision: main
+    path: projects/o11y/overlays/talos4
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

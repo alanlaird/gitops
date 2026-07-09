@@ -1,0 +1,17 @@
+# talos4 — prod pair (VM side). Full stack: NFS-agate persistence, 30d
+# metrics retention (base glue), MetalLB VIPs (.200 ingress, .202 loki),
+# grafana.laird.net behind ingress-nginx. The base victoriametrics glue IS
+# talos4's values, so the monitoring app needs no path patch here.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: argocd
+resources:
+  - ../../base
+components:
+  - ../../components/ingress
+patches:
+  - path: values/loki.yaml
+  - path: values/tempo.yaml
+  - path: values/prometheus.yaml
+  - path: values/prometheus-adapter.yaml
+  - path: values/ingress-nginx.yaml

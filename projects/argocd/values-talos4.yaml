@@ -1,0 +1,80 @@
+# ArgoCD on talos4 (prod pair, VM side). Ingress at argocd.laird.net,
+# ServiceMonitors into the local kube-prometheus stack, traces to Tempo.
+# KSOPS wired the same way as talos5 (see values-talos5.yaml for the why);
+# needed for SOPS-encrypted apps as Phase 5/6 workloads land on the pair.
+
+global:
+  domain: argocd.laird.net
+  logging:
+    format: json
+    level: info
+
+controller:
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      namespace: prometheus
+      additionalLabels:
+        release: prometheus
+
+server:
+  service:
+    type: ClusterIP
+  ingress:
+    enabled: true
+    hostname: argocd.laird.net
+    ingressClassName: nginx
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      namespace: prometheus
+      additionalLabels:
+        release: prometheus
+
+configs:
+  cm:
+    kustomize.buildOptions: --enable-alpha-plugins --enable-exec
+  params:
+    server.insecure: "true"
+    otlp.address: 'tempo.tempo.svc:4317'
+
+repoServer:
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      namespace: prometheus
+      additionalLabels:
+        release: prometheus
+  env:
+    - name: SOPS_AGE_KEY_FILE
+      value: /sops/age/keys.txt
+  initContainers:
+    # The ksops image is distroless (no shell, no cp), so a static busybox
+    # is seeded first and used to copy the ksops binary out.
+    - name: seed-busybox
+      image: busybox:stable-musl
+      command: ["cp", "/bin/busybox", "/custom-tools/busybox"]
+      volumeMounts:
+        - mountPath: /custom-tools
+          name: custom-tools
+    - name: install-ksops
+      image: viaductoss/ksops:v4.4.0
+      command: ["/custom-tools/busybox", "cp", "/usr/local/bin/ksops", "/custom-tools/ksops"]
+      volumeMounts:
+        - mountPath: /custom-tools
+          name: custom-tools
+  volumes:
+    - name: custom-tools
+      emptyDir: {}
+    - name: sops-age
+      secret:
+        secretName: sops-age
+  volumeMounts:
+    - mountPath: /usr/local/bin/ksops
+      name: custom-tools
+      subPath: ksops
+    - mountPath: /sops/age
+      name: sops-age

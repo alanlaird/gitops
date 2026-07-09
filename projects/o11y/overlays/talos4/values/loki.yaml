@@ -1,0 +1,25 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: loki
+  namespace: argocd
+spec:
+  source:
+    helm:
+      values: |
+        loki:
+          persistence:
+            enabled: true
+            storageClassName: nfs-agate
+            size: 10Gi
+          service:
+            type: LoadBalancer
+            annotations:
+              metallb.universe.tf/loadBalancerIPs: "172.16.16.202"
+        promtail:
+          enabled: true
+          config:
+            clients:
+              - url: http://loki:3100/loki/api/v1/push
+                external_labels:
+                  cluster: talos4
