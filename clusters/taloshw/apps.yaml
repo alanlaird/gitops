@@ -1,0 +1,29 @@
+# taloshw — everything this cluster runs. Applied once by hand
+# (kubectl apply -f), reconciled by Argo from then on.
+# Media apps (Phase 5.4+) land here as projects/media overlays.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argocd
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://argoproj.github.io/argo-helm
+      chart: argo-cd
+      targetRevision: 10.1.2
+      helm:
+        releaseName: argocd
+        valueFiles:
+          - $values/projects/argocd/values-taloshw.yaml
+    - repoURL: https://github.com/alanlaird/gitops
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    # Deliberately manual: Argo upgrading itself should be a chosen moment,
+    # not a background surprise on a prod-pair member.
+    syncOptions:
+      - ServerSideApply=true
