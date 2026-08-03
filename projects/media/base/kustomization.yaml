@@ -1,0 +1,11 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - namespace.yaml
+
+# App directories (sabnzbd/, prowlarr/, tubesync/, radarr/, sonarr/,
+# bazarr/) and buildarr/ get added to resources: here as each one migrates
+# (see readme/gitops-migration.md Phase 5.5 sequence). The KSOPS
+# secret-generator (secret-generator.yaml) gets wired into generators:
+# once the first per-app secret exists.

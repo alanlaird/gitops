@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: media
+  labels:
+    # mergerfs (radarr/sonarr/bazarr/tubesync sidecars) needs CAP_SYS_ADMIN
+    # + the /dev/fuse hostPath device — same requirement as media-nfs-test.
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/audit: privileged
+    pod-security.kubernetes.io/warn: privileged
