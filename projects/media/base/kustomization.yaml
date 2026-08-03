@@ -3,9 +3,16 @@ kind: Kustomization
 
 resources:
   - namespace.yaml
+  - sabnzbd/deployment.yaml
+  - sabnzbd/service.yaml
+  - sabnzbd/pvc.yaml
+  - sabnzbd/downloads-pvc.yaml
+  - sabnzbd-reconcile/script-configmap.yaml
+  - sabnzbd-reconcile/cronjob.yaml
 
-# App directories (sabnzbd/, prowlarr/, tubesync/, radarr/, sonarr/,
-# bazarr/) and buildarr/ get added to resources: here as each one migrates
-# (see readme/gitops-migration.md Phase 5.5 sequence). The KSOPS
-# secret-generator (secret-generator.yaml) gets wired into generators:
-# once the first per-app secret exists.
+generators:
+  - secret-generator.yaml
+
+# Remaining app directories (prowlarr/, tubesync/, radarr/, sonarr/,
+# bazarr/) and buildarr/ get added here as each one migrates (see
+# readme/gitops-migration.md Phase 5.5 sequence).

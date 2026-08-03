@@ -1,0 +1,43 @@
+# Small purpose-built reconciler using SABnzbd's real settings API
+# (api?mode=set_config) — patches exactly the keys that need to be
+# environment/secret-specific, leaves everything else (categories, RSS
+# feeds, anything set via the WebUI) untouched. Replaces fir's
+# whole-file sabnzbd.ini.j2 template overwrite. See
+# ansible-homelab:readme/gitops-migration.md's "Config management" plan.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sabnzbd-reconcile-script
+  namespace: media
+data:
+  reconcile.sh: |
+    #!/bin/sh
+    set -eu
+
+    BASE="http://sabnzbd.media.svc.cluster.local:8080/api"
+
+    # Read whatever key is CURRENTLY active on disk. Works whether this is
+    # the first run (fir's old, not-yet-rotated key, freshly copied in) or
+    # a later run (already rotated to $SABNZBD_API_KEY) — no chicken/egg
+    # assumption about which key is live.
+    CURRENT_KEY=$(grep -m1 '^api_key = ' /config/sabnzbd.ini | cut -d'=' -f2 | tr -d ' ')
+
+    call() {
+      section="$1"; keyword="$2"; value="$3"
+      resp=$(curl -sf --data-urlencode "value=${value}" \
+        "${BASE}?mode=set_config&section=${section}&keyword=${keyword}&apikey=${CURRENT_KEY}&output=json")
+      echo "  ${section}.${keyword}: ${resp}"
+    }
+
+    echo "Reconciling SABnzbd settings (current key: ${CURRENT_KEY:0:8}...)"
+
+    call misc api_key "${SABNZBD_API_KEY}"
+    CURRENT_KEY="${SABNZBD_API_KEY}"
+
+    call misc host_whitelist "sabnzbd.laird.net,172.16.16.221,fir,fir.laird.net"
+    call misc username "${SABNZBD_WEBUI_USERNAME}"
+    call misc password "${SABNZBD_WEBUI_PASSWORD}"
+    call servers news.tweaknews.eu username "${SABNZBD_USENET_USERNAME}"
+    call servers news.tweaknews.eu password "${SABNZBD_USENET_PASSWORD}"
+
+    echo "Reconcile complete."

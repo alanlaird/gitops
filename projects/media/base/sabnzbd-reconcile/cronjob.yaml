@@ -1,0 +1,48 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: sabnzbd-reconcile
+  namespace: media
+spec:
+  schedule: "0 * * * *" # hourly — matches the Configarr precedent for this class of reconciler
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: Never
+          # sabnzbd-config is RWO Longhorn — that's node-scoped, not
+          # pod-scoped, so this Job's pod MUST land on whichever node the
+          # sabnzbd Deployment pod is already on, or the mount hangs
+          # waiting for a volume already attached elsewhere.
+          affinity:
+            podAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector:
+                    matchLabels: { app: sabnzbd }
+                  topologyKey: kubernetes.io/hostname
+          containers:
+            - name: reconcile
+              image: curlimages/curl:latest
+              command: ["/bin/sh", "/scripts/reconcile.sh"]
+              env:
+                - { name: SABNZBD_API_KEY, valueFrom: { secretKeyRef: { name: sabnzbd-secrets, key: api_key } } }
+                - { name: SABNZBD_WEBUI_USERNAME, valueFrom: { secretKeyRef: { name: sabnzbd-secrets, key: webui_username } } }
+                - { name: SABNZBD_WEBUI_PASSWORD, valueFrom: { secretKeyRef: { name: sabnzbd-secrets, key: webui_password } } }
+                - { name: SABNZBD_USENET_USERNAME, valueFrom: { secretKeyRef: { name: sabnzbd-secrets, key: usenet_username } } }
+                - { name: SABNZBD_USENET_PASSWORD, valueFrom: { secretKeyRef: { name: sabnzbd-secrets, key: usenet_password } } }
+              volumeMounts:
+                - { name: script, mountPath: /scripts }
+                - { name: config, mountPath: /config, readOnly: true }
+          volumes:
+            - name: script
+              configMap:
+                name: sabnzbd-reconcile-script
+                defaultMode: 0755
+            - name: config
+              persistentVolumeClaim:
+                claimName: sabnzbd-config
+                readOnly: true

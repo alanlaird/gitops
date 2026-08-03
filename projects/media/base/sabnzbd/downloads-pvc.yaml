@@ -1,0 +1,16 @@
+# Shared by sabnzbd, radarr, and sonarr — created here (first app to need
+# it) and reused by the other two when they migrate. Not hardlink-sensitive
+# (fir's /data/downloads is already a different filesystem than /pool, so
+# these imports are already real copies) — just needs to be RWX across
+# whichever nodes the three pods land on.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: downloads
+  namespace: media
+spec:
+  accessModes: [ReadWriteMany]
+  storageClassName: nfs-agate
+  resources:
+    requests:
+      storage: 200Gi

@@ -1,0 +1,35 @@
+# Migrated from fir's podman pet (roles/media/tasks/sabnzbd.yml). Config is
+# no longer ansible-owned/re-templated on every run — see sabnzbd-reconcile/
+# for how api_key/host_whitelist/webui-auth/usenet creds actually get set.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sabnzbd
+  namespace: media
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate # RWO Longhorn config volume
+  selector:
+    matchLabels: { app: sabnzbd }
+  template:
+    metadata:
+      labels: { app: sabnzbd }
+    spec:
+      containers:
+        - name: sabnzbd
+          image: lscr.io/linuxserver/sabnzbd:latest
+          env:
+            - { name: PUID, value: "1098" }
+            - { name: PGID, value: "1098" }
+            - { name: TZ, value: "America/Phoenix" }
+          volumeMounts:
+            - { name: config, mountPath: /config }
+            - { name: downloads, mountPath: /data/downloads }
+          ports:
+            - containerPort: 8080
+      volumes:
+        - name: config
+          persistentVolumeClaim: { claimName: sabnzbd-config }
+        - name: downloads
+          persistentVolumeClaim: { claimName: downloads }

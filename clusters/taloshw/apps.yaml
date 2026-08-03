@@ -1,6 +1,5 @@
 # taloshw — everything this cluster runs. Applied once by hand
 # (kubectl apply -f), reconciled by Argo from then on.
-# Media apps (Phase 5.4+) land here as projects/media overlays.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -27,3 +26,23 @@ spec:
     # not a background surprise on a prod-pair member.
     syncOptions:
       - ServerSideApply=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: media
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/alanlaird/gitops
+    targetRevision: main
+    path: projects/media/overlays/taloshw
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: media
+  syncPolicy:
+    syncOptions:
+      - ServerSideApply=true
+    # manual for now — flip to automated+selfHeal once the pattern is
+    # proven across a few apps (Phase 5.5 cadence)
