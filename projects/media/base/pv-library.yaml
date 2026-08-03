@@ -1,0 +1,229 @@
+# Static NFS-CSI PVs for the 7 branches fir's mergerfs_pool unions (see
+# ansible-homelab:nodes/fir.yml). Read-write — this is the production
+# mergerfs pattern, validated read-only in terraform/taloshw/k8s/media-nfs-test/
+# and confirmed for real writes/hardlinks/branch-loss/concurrent-access
+# there before being adopted here.
+#
+# nfsvers=3,nolock: ophir/bullards (QNAP) don't run NFSv4 like agate does —
+# v4.1 mounts fail with "Protocol not supported", and default v3 fails with
+# "rpc.statd is not running" because the csi-nfs-node container has no rpc
+# services. nolock avoids needing statd.
+#
+# Cluster-scoped (not namespaced) — shared by every mergerfs-sidecar app
+# (tubesync, radarr, sonarr, bazarr) via the same PVC names.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: media-pool-media1
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes: [ReadWriteMany]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  mountOptions: [nfsvers=3, nolock]
+  csi:
+    driver: nfs.csi.k8s.io
+    volumeHandle: media-pool-media1
+    volumeAttributes:
+      server: "172.16.11.51" # ophir
+      share: /share/CACHEDEV4_DATA/media
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: media1
+  namespace: media
+spec:
+  accessModes: [ReadWriteMany]
+  storageClassName: ""
+  volumeName: media-pool-media1
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: media-pool-media2
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes: [ReadWriteMany]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  mountOptions: [nfsvers=3, nolock]
+  csi:
+    driver: nfs.csi.k8s.io
+    volumeHandle: media-pool-media2
+    volumeAttributes:
+      server: "172.16.11.51" # ophir
+      share: /share/CACHEDEV2_DATA/library
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: media2
+  namespace: media
+spec:
+  accessModes: [ReadWriteMany]
+  storageClassName: ""
+  volumeName: media-pool-media2
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: media-pool-media3
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes: [ReadWriteMany]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  mountOptions: [nfsvers=3, nolock]
+  csi:
+    driver: nfs.csi.k8s.io
+    volumeHandle: media-pool-media3
+    volumeAttributes:
+      server: "172.16.11.57" # bullards
+      share: /share/MD0_DATA/media/library
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: media3
+  namespace: media
+spec:
+  accessModes: [ReadWriteMany]
+  storageClassName: ""
+  volumeName: media-pool-media3
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: media-pool-media4
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes: [ReadWriteMany]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  mountOptions: [nfsvers=3, nolock]
+  csi:
+    driver: nfs.csi.k8s.io
+    volumeHandle: media-pool-media4
+    volumeAttributes:
+      server: "172.16.11.51" # ophir
+      share: /share/external/DEV0101_1
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: media4
+  namespace: media
+spec:
+  accessModes: [ReadWriteMany]
+  storageClassName: ""
+  volumeName: media-pool-media4
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: media-pool-media5
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes: [ReadWriteMany]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  mountOptions: [nfsvers=3, nolock]
+  csi:
+    driver: nfs.csi.k8s.io
+    volumeHandle: media-pool-media5
+    volumeAttributes:
+      server: "172.16.11.51" # ophir
+      share: /share/external/DEV0102_1
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: media5
+  namespace: media
+spec:
+  accessModes: [ReadWriteMany]
+  storageClassName: ""
+  volumeName: media-pool-media5
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: media-pool-media6
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes: [ReadWriteMany]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  mountOptions: [nfsvers=3, nolock]
+  csi:
+    driver: nfs.csi.k8s.io
+    volumeHandle: media-pool-media6
+    volumeAttributes:
+      server: "172.16.11.51" # ophir
+      share: /share/external/DEV0103_1
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: media6
+  namespace: media
+spec:
+  accessModes: [ReadWriteMany]
+  storageClassName: ""
+  volumeName: media-pool-media6
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: media-pool-media7
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes: [ReadWriteMany]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  mountOptions: [nfsvers=3, nolock]
+  csi:
+    driver: nfs.csi.k8s.io
+    volumeHandle: media-pool-media7
+    volumeAttributes:
+      server: "172.16.11.51" # ophir
+      share: /share/external/DEV0104_1
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: media7
+  namespace: media
+spec:
+  accessModes: [ReadWriteMany]
+  storageClassName: ""
+  volumeName: media-pool-media7
+  resources:
+    requests:
+      storage: 1Gi

@@ -1,0 +1,82 @@
+# Migrated from fir's podman pet (roles/media/tasks/tubesync.yml). fir
+# bind-mounts /pool/youtube directly at /downloads; TubeSync's own
+# DOWNLOAD_ROOT is a fixed internal path with no env var override
+# (confirmed against tubesync/tubesync/settings.py), and its entrypoint is
+# s6-overlay (/init) — not safe to override with a wrapper command.
+#
+# Solution: the mergerfs sidecar bind-mounts /pool/youtube to a SECOND
+# shared emptyDir ("youtube") after the union is up, using the exact same
+# Bidirectional/HostToContainer propagation already validated for the full
+# /pool mount in media-nfs-test (including self-healing after a sidecar
+# restart) — just applied one level deeper, to a subdirectory bind instead
+# of the FUSE mount itself. No subPath, no entrypoint changes needed.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tubesync
+  namespace: media
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate # RWO Longhorn config volume
+  selector:
+    matchLabels: { app: tubesync }
+  template:
+    metadata:
+      labels: { app: tubesync }
+    spec:
+      containers:
+        - name: mergerfs
+          image: alpine:edge
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -euo pipefail
+              echo "@testing http://dl-cdn.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories
+              apk add --no-cache fuse3 mergerfs@testing
+              mergerfs -f \
+                -o allow_other,use_ino,cache.files=partial,dropcacheonclose=true,category.create=mfs,minfreespace=20G \
+                /branches/media1:/branches/media2:/branches/media3:/branches/media4:/branches/media5:/branches/media6:/branches/media7 \
+                /pool &
+              MERGERFS_PID=$!
+              until mountpoint -q /pool; do sleep 1; done
+              mkdir -p /pool/youtube
+              mount -o bind /pool/youtube /youtube-mount
+              wait "$MERGERFS_PID"
+          securityContext:
+            privileged: true # Bidirectional propagation requires this
+          volumeMounts:
+            - { name: media1, mountPath: /branches/media1 }
+            - { name: media2, mountPath: /branches/media2 }
+            - { name: media3, mountPath: /branches/media3 }
+            - { name: media4, mountPath: /branches/media4 }
+            - { name: media5, mountPath: /branches/media5 }
+            - { name: media6, mountPath: /branches/media6 }
+            - { name: media7, mountPath: /branches/media7 }
+            - { name: fuse, mountPath: /dev/fuse }
+            - { name: pool, mountPath: /pool, mountPropagation: Bidirectional }
+            - { name: youtube, mountPath: /youtube-mount, mountPropagation: Bidirectional }
+        - name: tubesync
+          image: ghcr.io/meeb/tubesync:latest
+          env:
+            - { name: PUID, value: "1098" }
+            - { name: PGID, value: "1098" }
+            - { name: TZ, value: "America/Phoenix" }
+          volumeMounts:
+            - { name: config, mountPath: /config }
+            - { name: youtube, mountPath: /downloads, mountPropagation: HostToContainer }
+          ports:
+            - containerPort: 4848
+      volumes:
+        - { name: media1, persistentVolumeClaim: { claimName: media1 } }
+        - { name: media2, persistentVolumeClaim: { claimName: media2 } }
+        - { name: media3, persistentVolumeClaim: { claimName: media3 } }
+        - { name: media4, persistentVolumeClaim: { claimName: media4 } }
+        - { name: media5, persistentVolumeClaim: { claimName: media5 } }
+        - { name: media6, persistentVolumeClaim: { claimName: media6 } }
+        - { name: media7, persistentVolumeClaim: { claimName: media7 } }
+        - { name: fuse, hostPath: { path: /dev/fuse, type: CharDevice } }
+        - { name: pool, emptyDir: {} }
+        - { name: youtube, emptyDir: {} }
+        - name: config
+          persistentVolumeClaim: { claimName: tubesync-config }
