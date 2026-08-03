@@ -9,10 +9,16 @@ resources:
   - sabnzbd/downloads-pvc.yaml
   - sabnzbd-reconcile/script-configmap.yaml
   - sabnzbd-reconcile/cronjob.yaml
+  - prowlarr/deployment.yaml
+  - prowlarr/service.yaml
+  - prowlarr/pvc.yaml
+  - prowlarr-reconcile/script-configmap.yaml
+  - prowlarr-reconcile/cronjob.yaml
 
 generators:
   - secret-generator.yaml
 
-# Remaining app directories (prowlarr/, tubesync/, radarr/, sonarr/,
-# bazarr/) and buildarr/ get added here as each one migrates (see
+# Remaining app directories (tubesync/, radarr/, sonarr/, bazarr/) and
+# buildarr/ (if adopted — see prowlarr-reconcile/'s note on the Config
+# management decision) get added here as each one migrates (see
 # readme/gitops-migration.md Phase 5.5 sequence).

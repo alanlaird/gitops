@@ -1,0 +1,47 @@
+# Small purpose-built reconciler using Prowlarr's real config API
+# (/api/v1/config/host) — same pattern as sabnzbd-reconcile/. Reads the
+# currently-active API key straight off the mounted config PVC (works
+# whether that's fir's original self-generated key on first run, or the
+# already-rotated one on later runs — no chicken/egg assumption).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prowlarr-reconcile-script
+  namespace: media
+data:
+  reconcile.py: |
+    #!/usr/bin/env python3
+    import json, os, re, urllib.request
+
+    BASE = "http://prowlarr.media.svc.cluster.local:9696/api/v1"
+
+    with open("/config/config.xml") as f:
+        content = f.read()
+    current_key = re.search(r"<ApiKey>(.*)</ApiKey>", content).group(1)
+
+    def call(method, path, key, body=None):
+        data = json.dumps(body).encode() if body is not None else None
+        req = urllib.request.Request(
+            f"{BASE}{path}", data=data, method=method,
+            headers={"X-Api-Key": key, "Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req) as resp:
+            return json.loads(resp.read())
+
+    print(f"Reconciling Prowlarr settings (current key: {current_key[:8]}...)")
+
+    host_cfg = call("GET", "/config/host", current_key)
+    host_cfg["authenticationMethod"] = "forms"
+    host_cfg["authenticationRequired"] = "enabled"
+    host_cfg["username"] = os.environ["WEBUI_USERNAME"]
+    host_cfg["password"] = os.environ["WEBUI_PASSWORD"]
+    # apiKey may or may not be settable via this endpoint — if Prowlarr
+    # rejects/ignores it, the auth fields above still apply.
+    host_cfg["apiKey"] = os.environ["PROWLARR_API_KEY"]
+
+    result = call("PUT", f"/config/host/{host_cfg['id']}", current_key, host_cfg)
+    print("Result:", json.dumps({
+        k: result.get(k)
+        for k in ("authenticationMethod", "authenticationRequired", "username", "apiKey")
+    }))
+    print("Reconcile complete.")

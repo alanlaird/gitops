@@ -1,0 +1,33 @@
+# Migrated from fir's podman pet (roles/media/tasks/prowlarr.yml). No /pool
+# access needed (Prowlarr only indexes, never touches the library), so no
+# mergerfs sidecar. Auth/settings handled by prowlarr-reconcile/, not
+# ansible-templated config — see that directory's script for details.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prowlarr
+  namespace: media
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate # RWO Longhorn config volume
+  selector:
+    matchLabels: { app: prowlarr }
+  template:
+    metadata:
+      labels: { app: prowlarr }
+    spec:
+      containers:
+        - name: prowlarr
+          image: lscr.io/linuxserver/prowlarr:latest
+          env:
+            - { name: PUID, value: "1098" }
+            - { name: PGID, value: "1098" }
+            - { name: TZ, value: "America/Phoenix" }
+          volumeMounts:
+            - { name: config, mountPath: /config }
+          ports:
+            - containerPort: 9696
+      volumes:
+        - name: config
+          persistentVolumeClaim: { claimName: prowlarr-config }

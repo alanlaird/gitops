@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: prowlarr
+  namespace: media
+  annotations:
+    metallb.io/loadBalancerIPs: "172.16.16.222"
+spec:
+  type: LoadBalancer
+  selector: { app: prowlarr }
+  ports:
+    - port: 9696
+      targetPort: 9696
