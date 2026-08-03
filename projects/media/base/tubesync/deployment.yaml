@@ -39,7 +39,13 @@ spec:
                 /branches/media1:/branches/media2:/branches/media3:/branches/media4:/branches/media5:/branches/media6:/branches/media7 \
                 /pool &
               MERGERFS_PID=$!
-              until mountpoint -q /pool; do sleep 1; done
+              # /pool is ALREADY a mountpoint before this (the emptyDir
+              # volume mount itself) — mountpoint -q would return true
+              # immediately, racing ahead of mergerfs actually stacking its
+              # FUSE mount on top. Check /proc/mounts for the specific
+              # fuse.mergerfs entry instead. (Found via a real race: the
+              # first deploy bind-mounted the empty pre-FUSE directory.)
+              until grep -q ' /pool fuse\.mergerfs ' /proc/mounts; do sleep 1; done
               mkdir -p /pool/youtube
               mount -o bind /pool/youtube /youtube-mount
               wait "$MERGERFS_PID"
