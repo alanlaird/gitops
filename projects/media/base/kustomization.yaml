@@ -18,11 +18,14 @@ resources:
   - tubesync/deployment.yaml
   - tubesync/service.yaml
   - tubesync/pvc.yaml
+  - radarr/deployment.yaml
+  - radarr/service.yaml
+  - radarr/pvc.yaml
+  - radarr-reconcile/script-configmap.yaml
+  - radarr-reconcile/cronjob.yaml
 
 generators:
   - secret-generator.yaml
 
-# Remaining app directories (radarr/, sonarr/, bazarr/) and buildarr/ (if
-# adopted — see prowlarr-reconcile/'s note on the Config management
-# decision) get added here as each one migrates (see
-# readme/gitops-migration.md Phase 5.5 sequence).
+# Remaining app directories (sonarr/, bazarr/) get added here as each one
+# migrates (see readme/gitops-migration.md Phase 5.5 sequence).

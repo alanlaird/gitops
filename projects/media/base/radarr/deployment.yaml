@@ -1,0 +1,75 @@
+# Migrated from fir's podman pet (roles/media/tasks/radarr.yml). Root
+# folder /pool/movies needs read-write /pool access, so this app gets the
+# mergerfs sidecar (exact pattern validated in media-nfs-test, switched
+# ReadOnlyMany -> ReadWriteMany). API key rotation happens once, at data
+# migration time (edited directly into config.xml before first boot — see
+# the migration runbook, config.xml is Radarr's real source of truth for
+# its key, read once at startup, not live-settable via the API). Ongoing
+# settings drift (download client host, root folder) is corrected by
+# radarr-reconcile/, not ansible.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: radarr
+  namespace: media
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate # RWO Longhorn config volume
+  selector:
+    matchLabels: { app: radarr }
+  template:
+    metadata:
+      labels: { app: radarr }
+    spec:
+      containers:
+        - name: mergerfs
+          image: alpine:edge
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -euo pipefail
+              echo "@testing http://dl-cdn.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories
+              apk add --no-cache fuse3 mergerfs@testing
+              exec mergerfs -f \
+                -o allow_other,use_ino,cache.files=partial,dropcacheonclose=true,category.create=mfs,minfreespace=20G \
+                /branches/media1:/branches/media2:/branches/media3:/branches/media4:/branches/media5:/branches/media6:/branches/media7 \
+                /pool
+          securityContext:
+            privileged: true # Bidirectional propagation requires this
+          volumeMounts:
+            - { name: media1, mountPath: /branches/media1 }
+            - { name: media2, mountPath: /branches/media2 }
+            - { name: media3, mountPath: /branches/media3 }
+            - { name: media4, mountPath: /branches/media4 }
+            - { name: media5, mountPath: /branches/media5 }
+            - { name: media6, mountPath: /branches/media6 }
+            - { name: media7, mountPath: /branches/media7 }
+            - { name: fuse, mountPath: /dev/fuse }
+            - { name: pool, mountPath: /pool, mountPropagation: Bidirectional }
+        - name: radarr
+          image: lscr.io/linuxserver/radarr:latest
+          env:
+            - { name: PUID, value: "1098" }
+            - { name: PGID, value: "1098" } # correct var name -- fir's task set GUID (typo), files ended up group 911 (linuxserver default) as a result
+            - { name: TZ, value: "America/Phoenix" }
+          volumeMounts:
+            - { name: config, mountPath: /config }
+            - { name: pool, mountPath: /pool, mountPropagation: HostToContainer }
+            - { name: downloads, mountPath: /data/downloads }
+          ports:
+            - containerPort: 7878
+      volumes:
+        - { name: media1, persistentVolumeClaim: { claimName: media1 } }
+        - { name: media2, persistentVolumeClaim: { claimName: media2 } }
+        - { name: media3, persistentVolumeClaim: { claimName: media3 } }
+        - { name: media4, persistentVolumeClaim: { claimName: media4 } }
+        - { name: media5, persistentVolumeClaim: { claimName: media5 } }
+        - { name: media6, persistentVolumeClaim: { claimName: media6 } }
+        - { name: media7, persistentVolumeClaim: { claimName: media7 } }
+        - { name: fuse, hostPath: { path: /dev/fuse, type: CharDevice } }
+        - { name: pool, emptyDir: {} }
+        - name: config
+          persistentVolumeClaim: { claimName: radarr-config }
+        - name: downloads
+          persistentVolumeClaim: { claimName: downloads }

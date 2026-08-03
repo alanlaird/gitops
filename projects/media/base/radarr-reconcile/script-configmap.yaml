@@ -1,0 +1,58 @@
+# Small purpose-built reconciler using Radarr's real API (/api/v3), same
+# pattern as sabnzbd-reconcile/prowlarr-reconcile. Unlike those, this one
+# doesn't need to read the current key off the config PVC -- Radarr's API
+# key is set once, directly in config.xml, at data-migration time (its
+# real source of truth, read at startup, not live-settable via the API),
+# so by the time this runs the key in the Secret is already correct.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: radarr-reconcile-script
+  namespace: media
+data:
+  reconcile.py: |
+    #!/usr/bin/env python3
+    import json, os, urllib.request
+
+    BASE = "http://radarr.media.svc.cluster.local:7878/api/v3"
+    API_KEY = os.environ["RADARR_API_KEY"]
+
+    def call(method, path, body=None):
+        data = json.dumps(body).encode() if body is not None else None
+        req = urllib.request.Request(
+            f"{BASE}{path}", data=data, method=method,
+            headers={"X-Api-Key": API_KEY, "Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req) as resp:
+            raw = resp.read()
+            return json.loads(raw) if raw else None
+
+    print("Reconciling Radarr settings...")
+
+    folders = call("GET", "/rootfolder")
+    if not any(f["path"] == "/pool/movies" for f in folders):
+        call("POST", "/rootfolder", {"path": "/pool/movies"})
+        print("Added root folder /pool/movies")
+    else:
+        print("Root folder /pool/movies already present")
+
+    clients = call("GET", "/downloadclient")
+    sab = next((c for c in clients if c["implementation"] == "Sabnzbd"), None)
+    if sab:
+        changed = False
+        for f in sab["fields"]:
+            if f["name"] == "host" and f["value"] != "sabnzbd.laird.net":
+                f["value"] = "sabnzbd.laird.net"
+                changed = True
+            if f["name"] == "apiKey" and f["value"] != os.environ["SABNZBD_API_KEY"]:
+                f["value"] = os.environ["SABNZBD_API_KEY"]
+                changed = True
+        if changed:
+            call("PUT", f"/downloadclient/{sab['id']}", sab)
+            print("Updated SABnzbd download client")
+        else:
+            print("SABnzbd download client already correct")
+    else:
+        print("No SABnzbd download client found -- skipping")
+
+    print("Reconcile complete.")

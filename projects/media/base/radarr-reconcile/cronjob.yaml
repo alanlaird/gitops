@@ -1,0 +1,33 @@
+# No RWO config-PVC mount needed (unlike sabnzbd-reconcile/prowlarr-reconcile)
+# -- Radarr's API key is fixed at migration time, not read from disk here --
+# so no podAffinity/co-location requirement either.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: radarr-reconcile
+  namespace: media
+spec:
+  schedule: "0 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: reconcile
+              image: python:3-alpine
+              command: ["python3", "/scripts/reconcile.py"]
+              env:
+                - { name: RADARR_API_KEY, valueFrom: { secretKeyRef: { name: radarr-secrets, key: api_key } } }
+                - { name: SABNZBD_API_KEY, valueFrom: { secretKeyRef: { name: sabnzbd-secrets, key: api_key } } }
+              volumeMounts:
+                - { name: script, mountPath: /scripts }
+          volumes:
+            - name: script
+              configMap:
+                name: radarr-reconcile-script
+                defaultMode: 0755
