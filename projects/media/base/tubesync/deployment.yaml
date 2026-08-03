@@ -34,6 +34,14 @@ spec:
               set -euo pipefail
               echo "@testing http://dl-cdn.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories
               apk add --no-cache fuse3 mergerfs@testing
+              # This container's PID 1 is this shell, not mergerfs (it has
+              # to stay alive to do the bind-mount step below) — Kubernetes
+              # sends SIGTERM to the shell on pod termination, which a
+              # backgrounded child does NOT receive automatically. Without
+              # this trap, mergerfs never gets a chance to unmount cleanly
+              # and the container hits the grace-period SIGKILL every time
+              # (confirmed: exit code 137 on a real redeploy).
+              trap 'kill "$MERGERFS_PID" 2>/dev/null; wait "$MERGERFS_PID"' TERM
               mergerfs -f \
                 -o allow_other,use_ino,cache.files=partial,dropcacheonclose=true,category.create=mfs,minfreespace=20G \
                 /branches/media1:/branches/media2:/branches/media3:/branches/media4:/branches/media5:/branches/media6:/branches/media7 \
