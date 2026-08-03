@@ -11,7 +11,7 @@ metadata:
 data:
   reconcile.py: |
     #!/usr/bin/env python3
-    import json, os, re, urllib.request
+    import json, os, re, sys, urllib.error, urllib.request
 
     BASE = "http://prowlarr.media.svc.cluster.local:9696/api/v1"
 
@@ -25,8 +25,12 @@ data:
             f"{BASE}{path}", data=data, method=method,
             headers={"X-Api-Key": key, "Content-Type": "application/json"},
         )
-        with urllib.request.urlopen(req) as resp:
-            return json.loads(resp.read())
+        try:
+            with urllib.request.urlopen(req) as resp:
+                return json.loads(resp.read())
+        except urllib.error.HTTPError as e:
+            print(f"HTTP {e.code} on {method} {path}: {e.read().decode()}", file=sys.stderr)
+            raise
 
     print(f"Reconciling Prowlarr settings (current key: {current_key[:8]}...)")
 
@@ -35,8 +39,16 @@ data:
     host_cfg["authenticationRequired"] = "enabled"
     host_cfg["username"] = os.environ["WEBUI_USERNAME"]
     host_cfg["password"] = os.environ["WEBUI_PASSWORD"]
-    # apiKey may or may not be settable via this endpoint — if Prowlarr
-    # rejects/ignores it, the auth fields above still apply.
+    # Required alongside password when changing it, or Prowlarr 400s the
+    # whole request (confirmed empirically — the GET response always
+    # returns passwordConfirmation as "", round-tripping that unchanged
+    # while password differs fails validation).
+    host_cfg["passwordConfirmation"] = os.environ["WEBUI_PASSWORD"]
+    # Confirmed empirically: Prowlarr silently ignores apiKey changes via
+    # this endpoint (no error, value just doesn't change) — it's
+    # self-generated/read-only. Left here as a harmless no-op attempt in
+    # case a future version supports it; media_prowlarr_api_key in vault is
+    # otherwise unused for this app.
     host_cfg["apiKey"] = os.environ["PROWLARR_API_KEY"]
 
     result = call("PUT", f"/config/host/{host_cfg['id']}", current_key, host_cfg)
