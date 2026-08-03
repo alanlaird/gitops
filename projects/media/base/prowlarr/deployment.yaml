@@ -2,6 +2,13 @@
 # access needed (Prowlarr only indexes, never touches the library), so no
 # mergerfs sidecar. Auth/settings handled by prowlarr-reconcile/, not
 # ansible-templated config — see that directory's script for details.
+#
+# flaresolverr runs as a sidecar (not a separate Deployment/Service): fir
+# ran both on network: host, so Prowlarr's migrated indexerProxy config
+# already points at http://localhost:8191/ verbatim — a sidecar in the same
+# pod (sharing localhost via the pod network namespace) preserves that
+# exactly, no reconfiguration needed. Used by EZTV and similar
+# Cloudflare-gated indexers.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -28,6 +35,13 @@ spec:
             - { name: config, mountPath: /config }
           ports:
             - containerPort: 9696
+        - name: flaresolverr
+          image: ghcr.io/flaresolverr/flaresolverr:latest
+          env:
+            - { name: LOG_LEVEL, value: "info" }
+            - { name: TZ, value: "America/Phoenix" }
+          ports:
+            - containerPort: 8191
       volumes:
         - name: config
           persistentVolumeClaim: { claimName: prowlarr-config }
