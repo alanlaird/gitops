@@ -7,7 +7,9 @@
 # API key is self-generated on first boot and was carried over as-is by
 # the data migration (nothing depends on Bazarr as a client, so unlike
 # Radarr/Sonarr there's no hygiene reason to rotate it) -- read off the
-# mounted config PVC, same as prowlarr-reconcile reads config.xml.
+# mounted config PVC, same as prowlarr-reconcile reads config.xml. Bazarr
+# nests its actual settings file one level deeper than the other apps --
+# /config/config/config.yaml, not /config/config.yaml.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -20,7 +22,7 @@ data:
 
     BASE = "http://bazarr.media.svc.cluster.local:6767/api"
 
-    with open("/config/config.yaml") as f:
+    with open("/config/config/config.yaml") as f:
         content = f.read()
     auth_block = re.search(r"^auth:\n((?:  .*\n?)+)", content, re.MULTILINE).group(1)
     current_key = re.search(r"  apikey: (\S+)", auth_block).group(1)
