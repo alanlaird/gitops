@@ -1,26 +1,29 @@
-# Migrated from fir's podman pet (roles/media/tasks/radarr.yml). Root
-# folder /pool/movies needs read-write /pool access, so this app gets the
-# mergerfs sidecar (exact pattern validated in media-nfs-test, switched
-# ReadOnlyMany -> ReadWriteMany). API key rotation happens once, at data
-# migration time (edited directly into config.xml before first boot — see
-# the migration runbook, config.xml is Radarr's real source of truth for
+# Migrated from fir's podman pet (roles/media/tasks/sonarr.yml). Root
+# folders /pool/tv and /pool/anime/tv need read-write /pool access, so this
+# app gets the mergerfs sidecar (exact pattern validated in media-nfs-test,
+# switched ReadOnlyMany -> ReadWriteMany). API key rotation happens once, at
+# data migration time (edited directly into config.xml before first boot --
+# see the migration runbook, config.xml is Sonarr's real source of truth for
 # its key, read once at startup, not live-settable via the API). Ongoing
-# settings drift (download client host, root folder) is corrected by
-# radarr-reconcile/, not ansible.
+# settings drift (download client host, root folders) is corrected by
+# sonarr-reconcile/, not ansible. DOCKER_MODS carried over from fir --
+# strips unwanted audio/subtitle tracks on import, same mod Radarr uses
+# (the "radarr-" prefix in the mod name is just its origin, it works for
+# any Servarr app that fires the same on-import custom script event).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: radarr
+  name: sonarr
   namespace: media
 spec:
   replicas: 1
   strategy:
     type: Recreate # RWO Longhorn config volume
   selector:
-    matchLabels: { app: radarr }
+    matchLabels: { app: sonarr }
   template:
     metadata:
-      labels: { app: radarr }
+      labels: { app: sonarr }
     spec:
       containers:
         - name: mergerfs
@@ -47,19 +50,19 @@ spec:
             - { name: media7, mountPath: /branches/media7 }
             - { name: fuse, mountPath: /dev/fuse }
             - { name: pool, mountPath: /pool, mountPropagation: Bidirectional }
-        - name: radarr
-          image: lscr.io/linuxserver/radarr:latest
+        - name: sonarr
+          image: lscr.io/linuxserver/sonarr:latest
           env:
             - { name: PUID, value: "1098" }
-            - { name: PGID, value: "1098" } # correct var name -- fir's task set GUID (typo), files ended up group 911 (linuxserver default) as a result
+            - { name: PGID, value: "1098" } # correct var name -- fir's task set GUID (typo)
             - { name: TZ, value: "America/Phoenix" }
-            - { name: DOCKER_MODS, value: "linuxserver/mods:radarr-striptracks" } # carried over from fir -- strips unwanted audio/subtitle tracks on import
+            - { name: DOCKER_MODS, value: "linuxserver/mods:radarr-striptracks" }
           volumeMounts:
             - { name: config, mountPath: /config }
             - { name: pool, mountPath: /pool, mountPropagation: HostToContainer }
             - { name: downloads, mountPath: /data/downloads }
           ports:
-            - containerPort: 7878
+            - containerPort: 8989
       volumes:
         - { name: media1, persistentVolumeClaim: { claimName: media1 } }
         - { name: media2, persistentVolumeClaim: { claimName: media2 } }
@@ -71,6 +74,6 @@ spec:
         - { name: fuse, hostPath: { path: /dev/fuse, type: CharDevice } }
         - { name: pool, emptyDir: {} }
         - name: config
-          persistentVolumeClaim: { claimName: radarr-config }
+          persistentVolumeClaim: { claimName: sonarr-config }
         - name: downloads
           persistentVolumeClaim: { claimName: downloads }

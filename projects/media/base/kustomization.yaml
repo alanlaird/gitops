@@ -23,9 +23,14 @@ resources:
   - radarr/pvc.yaml
   - radarr-reconcile/script-configmap.yaml
   - radarr-reconcile/cronjob.yaml
+  - sonarr/deployment.yaml
+  - sonarr/service.yaml
+  - sonarr/pvc.yaml
+  - sonarr-reconcile/script-configmap.yaml
+  - sonarr-reconcile/cronjob.yaml
 
 generators:
   - secret-generator.yaml
 
-# Remaining app directories (sonarr/, bazarr/) get added here as each one
-# migrates (see readme/gitops-migration.md Phase 5.5 sequence).
+# Remaining app directory (bazarr/) gets added here once it migrates (see
+# readme/gitops-migration.md Phase 5.5 sequence).

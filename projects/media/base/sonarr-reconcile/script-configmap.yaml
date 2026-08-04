@@ -1,0 +1,88 @@
+# Small purpose-built reconciler using Sonarr's real API (/api/v3), same
+# pattern as sabnzbd-reconcile/prowlarr-reconcile/radarr-reconcile. Unlike
+# those, this one doesn't need to read the current key off the config PVC --
+# Sonarr's API key is set once, directly in config.xml, at data-migration
+# time (its real source of truth, read at startup, not live-settable via the
+# API), so by the time this runs the key in the Secret is already correct.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sonarr-reconcile-script
+  namespace: media
+data:
+  reconcile.py: |
+    #!/usr/bin/env python3
+    import json, os, urllib.request
+
+    BASE = "http://sonarr.media.svc.cluster.local:8989/api/v3"
+    API_KEY = os.environ["SONARR_API_KEY"]
+
+    def call(method, path, body=None):
+        data = json.dumps(body).encode() if body is not None else None
+        req = urllib.request.Request(
+            f"{BASE}{path}", data=data, method=method,
+            headers={"X-Api-Key": API_KEY, "Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req) as resp:
+            raw = resp.read()
+            return json.loads(raw) if raw else None
+
+    print("Reconciling Sonarr settings...")
+
+    # password/passwordConfirmation are never returned in comparable form
+    # (Sonarr sends back a hash, not the plaintext) -- only gate "changed" on
+    # the fields that come back verbatim, but always resend password
+    # alongside them so it converges whenever those fields needed fixing.
+    host_cfg = call("GET", "/config/host")
+    changed = False
+    if host_cfg.get("authenticationMethod") != "forms":
+        host_cfg["authenticationMethod"] = "forms"
+        changed = True
+    if host_cfg.get("authenticationRequired") != "enabled":
+        host_cfg["authenticationRequired"] = "enabled"
+        changed = True
+    if host_cfg.get("username") != os.environ["WEBUI_USERNAME"]:
+        host_cfg["username"] = os.environ["WEBUI_USERNAME"]
+        changed = True
+    if changed:
+        host_cfg["password"] = os.environ["WEBUI_PASSWORD"]
+        host_cfg["passwordConfirmation"] = os.environ["WEBUI_PASSWORD"]
+        call("PUT", f"/config/host/{host_cfg['id']}", host_cfg)
+        print("Updated WebUI auth settings")
+    else:
+        print("WebUI auth settings already correct")
+
+    # Sonarr has two root folders (regular TV + anime), unlike Radarr's one.
+    folders = call("GET", "/rootfolder")
+    existing_paths = {f["path"] for f in folders}
+    for path in ("/pool/tv", "/pool/anime/tv"):
+        if path not in existing_paths:
+            call("POST", "/rootfolder", {"path": path})
+            print(f"Added root folder {path}")
+        else:
+            print(f"Root folder {path} already present")
+
+    # apiKey is a privacy field -- GET always returns "********", never the
+    # real value, so it can't be diffed. Only gate "changed" on host (which
+    # comes back verbatim); resend apiKey alongside it whenever host needed
+    # fixing, same reasoning as the auth block above.
+    clients = call("GET", "/downloadclient")
+    sab = next((c for c in clients if c["implementation"] == "Sabnzbd"), None)
+    if sab:
+        changed = False
+        for f in sab["fields"]:
+            if f["name"] == "host" and f["value"] != "sabnzbd.laird.net":
+                f["value"] = "sabnzbd.laird.net"
+                changed = True
+        if changed:
+            for f in sab["fields"]:
+                if f["name"] == "apiKey":
+                    f["value"] = os.environ["SABNZBD_API_KEY"]
+            call("PUT", f"/downloadclient/{sab['id']}", sab)
+            print("Updated SABnzbd download client")
+        else:
+            print("SABnzbd download client already correct")
+    else:
+        print("No SABnzbd download client found -- skipping")
+
+    print("Reconcile complete.")

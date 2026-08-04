@@ -1,0 +1,13 @@
+# sqlite/state config — Longhorn, not NFS (locking risk, see
+# gitops-migration.md "Config storage vs the mobility rule").
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: sonarr-config
+  namespace: media
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 5Gi
