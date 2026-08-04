@@ -125,6 +125,12 @@ data:
           <span class="port">:4848</span>
         </a>
 
+        <a href="http://transmission.laird.net:9091">
+          <span class="name">Transmission</span>
+          <span class="desc">BitTorrent client (taloshw k8s)</span>
+          <span class="port">:9091</span>
+        </a>
+
         <a href="http://arago.laird.net:8181">
           <span class="name">Tautulli</span>
           <span class="desc">Plex analytics (arago)</span>
