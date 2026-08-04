@@ -93,10 +93,10 @@ data:
     if tr:
         changed = False
         for f in tr["fields"]:
-            if f["name"] == "host" and f["value"] != "transmission.laird.net":
+            if f["name"] == "host" and f.get("value") != "transmission.laird.net":
                 f["value"] = "transmission.laird.net"
                 changed = True
-            if f["name"] == "username" and f["value"] != os.environ["WEBUI_USERNAME"]:
+            if f["name"] == "username" and f.get("value") != os.environ["WEBUI_USERNAME"]:
                 f["value"] = os.environ["WEBUI_USERNAME"]
                 changed = True
         if changed:
