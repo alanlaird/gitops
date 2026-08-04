@@ -27,6 +27,22 @@ spec:
     metadata:
       labels: { app: transmission }
     spec:
+      # None of these 3 containers resolve any in-cluster service by short
+      # name (transmission talks to gluetun over 127.0.0.1, port-sync too,
+      # mergerfs only does NFS-CSI at the host level) -- but k8s's default
+      # resolv.conf still injects a 3-level search domain + ndots:5, which
+      # gluetun preserves when it rewrites only the nameserver line to
+      # 127.0.0.1. That multiplies every external DNS lookup gluetun's own
+      # healthcheck makes (github.com, cloudflare.com, etc. -- 1 dot, well
+      # under ndots:5) into 4 search-suffixed variants x A/AAAA each,
+      # overwhelming its internal DNS-over-TLS resolver right after
+      # startup (observed: UDP recv-queue backlog on 127.0.0.1:53, queries
+      # failing with "resource temporarily unavailable", healthcheck fails,
+      # container restarts). ndots:1 skips search-domain expansion for any
+      # hostname with a dot, which every external lookup gluetun makes has.
+      dnsConfig:
+        options:
+          - { name: ndots, value: "1" }
       containers:
         - name: mergerfs
           image: alpine:edge
