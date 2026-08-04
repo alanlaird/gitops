@@ -28,9 +28,14 @@ resources:
   - sonarr/pvc.yaml
   - sonarr-reconcile/script-configmap.yaml
   - sonarr-reconcile/cronjob.yaml
+  - bazarr/deployment.yaml
+  - bazarr/service.yaml
+  - bazarr/pvc.yaml
+  - bazarr-reconcile/script-configmap.yaml
+  - bazarr-reconcile/cronjob.yaml
 
 generators:
   - secret-generator.yaml
 
-# Remaining app directory (bazarr/) gets added here once it migrates (see
-# readme/gitops-migration.md Phase 5.5 sequence).
+# All six *arr-family apps + Tubesync now migrated (see
+# readme/gitops-migration.md Phase 5.5).

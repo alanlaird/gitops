@@ -1,0 +1,97 @@
+# Small purpose-built reconciler using Bazarr's real settings API
+# (/api/system/settings), same pattern as sabnzbd-reconcile/
+# prowlarr-reconcile/radarr-reconcile/sonarr-reconcile. Bazarr's settings
+# endpoint takes form-encoded POSTs with "settings-<section>-<key>" field
+# names (confirmed empirically against a live instance -- not documented),
+# not JSON, unlike every other app's reconcile script here. Bazarr's own
+# API key is self-generated on first boot and was carried over as-is by
+# the data migration (nothing depends on Bazarr as a client, so unlike
+# Radarr/Sonarr there's no hygiene reason to rotate it) -- read off the
+# mounted config PVC, same as prowlarr-reconcile reads config.xml.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bazarr-reconcile-script
+  namespace: media
+data:
+  reconcile.py: |
+    #!/usr/bin/env python3
+    import hashlib, json, os, re, urllib.parse, urllib.request
+
+    BASE = "http://bazarr.media.svc.cluster.local:6767/api"
+
+    with open("/config/config.yaml") as f:
+        content = f.read()
+    auth_block = re.search(r"^auth:\n((?:  .*\n?)+)", content, re.MULTILINE).group(1)
+    current_key = re.search(r"  apikey: (\S+)", auth_block).group(1)
+
+    def get(path):
+        req = urllib.request.Request(f"{BASE}{path}", headers={"X-API-KEY": current_key})
+        with urllib.request.urlopen(req) as resp:
+            return json.loads(resp.read())
+
+    def post_settings(fields):
+        data = urllib.parse.urlencode(fields).encode()
+        req = urllib.request.Request(
+            f"{BASE}/system/settings", data=data, method="POST",
+            headers={"X-API-KEY": current_key, "Content-Type": "application/x-www-form-urlencoded"},
+        )
+        with urllib.request.urlopen(req) as resp:
+            resp.read()
+
+    print("Reconciling Bazarr settings...")
+
+    settings = get("/system/settings")
+
+    # password comes back as an MD5 hash -- unlike Radarr/Sonarr/Prowlarr's
+    # masked/hashed-with-salt fields, this one is directly comparable.
+    auth = settings["auth"]
+    want_password_hash = hashlib.md5(os.environ["WEBUI_PASSWORD"].encode()).hexdigest()
+    if (
+        auth.get("type") != "form"
+        or auth.get("username") != os.environ["WEBUI_USERNAME"]
+        or auth.get("password") != want_password_hash
+    ):
+        post_settings({
+            "settings-auth-type": "form",
+            "settings-auth-username": os.environ["WEBUI_USERNAME"],
+            "settings-auth-password": os.environ["WEBUI_PASSWORD"],
+        })
+        print("Updated WebUI auth settings")
+    else:
+        print("WebUI auth settings already correct")
+
+    # Unlike Radarr/Sonarr/Prowlarr, Bazarr's settings GET returns apikey
+    # fields in plaintext (confirmed empirically), so these can be fully
+    # diffed rather than force-resent whenever anything else changed.
+    sonarr = settings["sonarr"]
+    if (
+        sonarr.get("ip") != "sonarr.laird.net"
+        or sonarr.get("port") != 8989
+        or sonarr.get("apikey") != os.environ["SONARR_API_KEY"]
+    ):
+        post_settings({
+            "settings-sonarr-ip": "sonarr.laird.net",
+            "settings-sonarr-port": "8989",
+            "settings-sonarr-apikey": os.environ["SONARR_API_KEY"],
+        })
+        print("Updated Sonarr connection settings")
+    else:
+        print("Sonarr connection settings already correct")
+
+    radarr = settings["radarr"]
+    if (
+        radarr.get("ip") != "radarr.laird.net"
+        or radarr.get("port") != 7878
+        or radarr.get("apikey") != os.environ["RADARR_API_KEY"]
+    ):
+        post_settings({
+            "settings-radarr-ip": "radarr.laird.net",
+            "settings-radarr-port": "7878",
+            "settings-radarr-apikey": os.environ["RADARR_API_KEY"],
+        })
+        print("Updated Radarr connection settings")
+    else:
+        print("Radarr connection settings already correct")
+
+    print("Reconcile complete.")

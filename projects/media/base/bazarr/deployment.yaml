@@ -1,0 +1,71 @@
+# Migrated from fir's podman pet (roles/media/tasks/bazarr.yml). Bazarr
+# writes subtitle files alongside media under /pool/movies, /pool/tv, and
+# /pool/anime/tv, so it needs read-write /pool access -- same mergerfs
+# sidecar pattern as Radarr/Sonarr. No downloads volume (Bazarr never
+# touches SABnzbd's downloads dir). Last app in the migration: both
+# Radarr and Sonarr are already on k8s with final rotated keys, so this
+# app's Sonarr/Radarr wiring is written once to final values by
+# bazarr-reconcile, never pointed-then-repointed.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bazarr
+  namespace: media
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate # RWO Longhorn config volume
+  selector:
+    matchLabels: { app: bazarr }
+  template:
+    metadata:
+      labels: { app: bazarr }
+    spec:
+      containers:
+        - name: mergerfs
+          image: alpine:edge
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -euo pipefail
+              echo "@testing http://dl-cdn.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories
+              apk add --no-cache fuse3 mergerfs@testing
+              exec mergerfs -f \
+                -o allow_other,use_ino,cache.files=partial,dropcacheonclose=true,category.create=mfs,minfreespace=20G \
+                /branches/media1:/branches/media2:/branches/media3:/branches/media4:/branches/media5:/branches/media6:/branches/media7 \
+                /pool
+          securityContext:
+            privileged: true # Bidirectional propagation requires this
+          volumeMounts:
+            - { name: media1, mountPath: /branches/media1 }
+            - { name: media2, mountPath: /branches/media2 }
+            - { name: media3, mountPath: /branches/media3 }
+            - { name: media4, mountPath: /branches/media4 }
+            - { name: media5, mountPath: /branches/media5 }
+            - { name: media6, mountPath: /branches/media6 }
+            - { name: media7, mountPath: /branches/media7 }
+            - { name: fuse, mountPath: /dev/fuse }
+            - { name: pool, mountPath: /pool, mountPropagation: Bidirectional }
+        - name: bazarr
+          image: lscr.io/linuxserver/bazarr:latest
+          env:
+            - { name: PUID, value: "1098" }
+            - { name: PGID, value: "1098" }
+            - { name: TZ, value: "America/Phoenix" }
+          volumeMounts:
+            - { name: config, mountPath: /config }
+            - { name: pool, mountPath: /pool, mountPropagation: HostToContainer }
+          ports:
+            - containerPort: 6767
+      volumes:
+        - { name: media1, persistentVolumeClaim: { claimName: media1 } }
+        - { name: media2, persistentVolumeClaim: { claimName: media2 } }
+        - { name: media3, persistentVolumeClaim: { claimName: media3 } }
+        - { name: media4, persistentVolumeClaim: { claimName: media4 } }
+        - { name: media5, persistentVolumeClaim: { claimName: media5 } }
+        - { name: media6, persistentVolumeClaim: { claimName: media6 } }
+        - { name: media7, persistentVolumeClaim: { claimName: media7 } }
+        - { name: fuse, hostPath: { path: /dev/fuse, type: CharDevice } }
+        - { name: pool, emptyDir: {} }
+        - name: config
+          persistentVolumeClaim: { claimName: bazarr-config }

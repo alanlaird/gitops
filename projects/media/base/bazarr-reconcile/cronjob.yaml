@@ -1,0 +1,46 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: bazarr-reconcile
+  namespace: media
+spec:
+  schedule: "0 * * * *" # hourly, same cadence as the other reconcile jobs
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: Never
+          # bazarr-config is RWO Longhorn — node-scoped, not pod-scoped.
+          # Must land on the same node as the running bazarr pod, or the
+          # mount hangs (same reasoning as sabnzbd-reconcile/prowlarr-reconcile).
+          affinity:
+            podAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector:
+                    matchLabels: { app: bazarr }
+                  topologyKey: kubernetes.io/hostname
+          containers:
+            - name: reconcile
+              image: python:3-alpine
+              command: ["python3", "/scripts/reconcile.py"]
+              env:
+                - { name: SONARR_API_KEY, valueFrom: { secretKeyRef: { name: sonarr-secrets, key: api_key } } }
+                - { name: RADARR_API_KEY, valueFrom: { secretKeyRef: { name: radarr-secrets, key: api_key } } }
+                - { name: WEBUI_USERNAME, valueFrom: { secretKeyRef: { name: webui-auth, key: username } } }
+                - { name: WEBUI_PASSWORD, valueFrom: { secretKeyRef: { name: webui-auth, key: password } } }
+              volumeMounts:
+                - { name: script, mountPath: /scripts }
+                - { name: config, mountPath: /config, readOnly: true }
+          volumes:
+            - name: script
+              configMap:
+                name: bazarr-reconcile-script
+                defaultMode: 0755
+            - name: config
+              persistentVolumeClaim:
+                claimName: bazarr-config
+                readOnly: true
