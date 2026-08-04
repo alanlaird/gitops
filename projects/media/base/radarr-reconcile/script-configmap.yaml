@@ -29,6 +29,10 @@ data:
 
     print("Reconciling Radarr settings...")
 
+    # password/passwordConfirmation are never returned in comparable form
+    # (Radarr sends back a hash, not the plaintext) -- only gate "changed" on
+    # the fields that come back verbatim, but always resend password
+    # alongside them so it converges whenever those fields needed fixing.
     host_cfg = call("GET", "/config/host")
     changed = False
     if host_cfg.get("authenticationMethod") != "forms":
@@ -40,11 +44,9 @@ data:
     if host_cfg.get("username") != os.environ["WEBUI_USERNAME"]:
         host_cfg["username"] = os.environ["WEBUI_USERNAME"]
         changed = True
-    if host_cfg.get("password") != os.environ["WEBUI_PASSWORD"]:
+    if changed:
         host_cfg["password"] = os.environ["WEBUI_PASSWORD"]
         host_cfg["passwordConfirmation"] = os.environ["WEBUI_PASSWORD"]
-        changed = True
-    if changed:
         call("PUT", f"/config/host/{host_cfg['id']}", host_cfg)
         print("Updated WebUI auth settings")
     else:
@@ -57,6 +59,10 @@ data:
     else:
         print("Root folder /pool/movies already present")
 
+    # apiKey is a privacy field -- GET always returns "********", never the
+    # real value, so it can't be diffed. Only gate "changed" on host (which
+    # comes back verbatim); resend apiKey alongside it whenever host needed
+    # fixing, same reasoning as the auth block above.
     clients = call("GET", "/downloadclient")
     sab = next((c for c in clients if c["implementation"] == "Sabnzbd"), None)
     if sab:
@@ -65,10 +71,10 @@ data:
             if f["name"] == "host" and f["value"] != "sabnzbd.laird.net":
                 f["value"] = "sabnzbd.laird.net"
                 changed = True
-            if f["name"] == "apiKey" and f["value"] != os.environ["SABNZBD_API_KEY"]:
-                f["value"] = os.environ["SABNZBD_API_KEY"]
-                changed = True
         if changed:
+            for f in sab["fields"]:
+                if f["name"] == "apiKey":
+                    f["value"] = os.environ["SABNZBD_API_KEY"]
             call("PUT", f"/downloadclient/{sab['id']}", sab)
             print("Updated SABnzbd download client")
         else:
