@@ -24,6 +24,8 @@ spec:
               env:
                 - { name: RADARR_API_KEY, valueFrom: { secretKeyRef: { name: radarr-secrets, key: api_key } } }
                 - { name: SABNZBD_API_KEY, valueFrom: { secretKeyRef: { name: sabnzbd-secrets, key: api_key } } }
+                - { name: WEBUI_USERNAME, valueFrom: { secretKeyRef: { name: webui-auth, key: username } } }
+                - { name: WEBUI_PASSWORD, valueFrom: { secretKeyRef: { name: webui-auth, key: password } } }
               volumeMounts:
                 - { name: script, mountPath: /scripts }
           volumes:

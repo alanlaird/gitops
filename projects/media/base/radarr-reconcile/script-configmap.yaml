@@ -29,6 +29,27 @@ data:
 
     print("Reconciling Radarr settings...")
 
+    host_cfg = call("GET", "/config/host")
+    changed = False
+    if host_cfg.get("authenticationMethod") != "forms":
+        host_cfg["authenticationMethod"] = "forms"
+        changed = True
+    if host_cfg.get("authenticationRequired") != "enabled":
+        host_cfg["authenticationRequired"] = "enabled"
+        changed = True
+    if host_cfg.get("username") != os.environ["WEBUI_USERNAME"]:
+        host_cfg["username"] = os.environ["WEBUI_USERNAME"]
+        changed = True
+    if host_cfg.get("password") != os.environ["WEBUI_PASSWORD"]:
+        host_cfg["password"] = os.environ["WEBUI_PASSWORD"]
+        host_cfg["passwordConfirmation"] = os.environ["WEBUI_PASSWORD"]
+        changed = True
+    if changed:
+        call("PUT", f"/config/host/{host_cfg['id']}", host_cfg)
+        print("Updated WebUI auth settings")
+    else:
+        print("WebUI auth settings already correct")
+
     folders = call("GET", "/rootfolder")
     if not any(f["path"] == "/pool/movies" for f in folders):
         call("POST", "/rootfolder", {"path": "/pool/movies"})
