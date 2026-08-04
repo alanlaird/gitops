@@ -1,0 +1,29 @@
+# Static landing page for the whole media stack, regardless of which host
+# each service actually lives on (unlike fir's own http://fir/ homepage,
+# which is scoped to services running on fir specifically). Plain caddy
+# file_server serving the ConfigMap-mounted index.html -- no build step,
+# no persistence needed, update the ConfigMap and roll the pod to change it.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: media-landing
+  namespace: media
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: media-landing }
+  template:
+    metadata:
+      labels: { app: media-landing }
+    spec:
+      containers:
+        - name: caddy
+          image: caddy:latest
+          volumeMounts:
+            - { name: index, mountPath: /usr/share/caddy/index.html, subPath: index.html }
+          ports:
+            - containerPort: 80
+      volumes:
+        - name: index
+          configMap:
+            name: media-landing-index
