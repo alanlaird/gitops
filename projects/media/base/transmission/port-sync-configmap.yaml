@@ -4,12 +4,17 @@
 # into transmission over RPC at a 20s cadence. Runs under the linuxserver
 # image's s6 supervisor via /custom-services.d.
 #
-# -n "$USER:$PASS" is the one real deviation from elkton's script: once
-# WebUI auth is on (see deployment.yaml), transmission-remote's own RPC
-# calls need credentials too, or they silently start 401ing and NAT-PMP
-# port sync stops working. USER/PASS are already env vars on this
-# container (needed for init-transmission-config); s6 custom services
-# inherit the container environment.
+# Two real deviations from elkton's script, both from turning on WebUI auth
+# (see deployment.yaml):
+# - transmission-remote's own RPC calls need credentials too now, or they
+#   silently start 401ing and NAT-PMP port sync stops working.
+# - Confirmed live: s6-overlay launches custom-services.d scripts (this one)
+#   before the container's full environment is settled -- this script's own
+#   process had no USER/PASS in its environment at all, even though
+#   init-transmission-config (which runs later) sees them fine. Reading
+#   credentials fresh from mounted secret files every loop iteration,
+#   instead of trusting inherited shell env vars, sidesteps that timing
+#   issue entirely.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -22,11 +27,13 @@ data:
     # port-mapping client must stay off or the two race for the mapping.
     while true; do
         port=$(cat /gluetun-state/forwarded_port 2>/dev/null)
-        if [ -n "$port" ]; then
-            current=$(transmission-remote 127.0.0.1:9091 -n "$USER:$PASS" --session-info 2>/dev/null \
+        user=$(cat /run/secrets/webui-auth/username 2>/dev/null)
+        pass=$(cat /run/secrets/webui-auth/password 2>/dev/null)
+        if [ -n "$port" ] && [ -n "$user" ]; then
+            current=$(transmission-remote 127.0.0.1:9091 -n "$user:$pass" --session-info 2>/dev/null \
                 | sed -n -E 's/.*Listen ?[Pp]ort: //p')
             if [ "$port" != "$current" ]; then
-                transmission-remote 127.0.0.1:9091 -n "$USER:$PASS" --port "$port" --no-portmap
+                transmission-remote 127.0.0.1:9091 -n "$user:$pass" --port "$port" --no-portmap
             fi
         fi
         sleep 20

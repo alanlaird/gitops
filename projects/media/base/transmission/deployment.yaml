@@ -153,6 +153,14 @@ spec:
             - { name: pool, mountPath: /pool, mountPropagation: HostToContainer }
             - { name: port-sync, mountPath: /custom-services.d }
             - { name: gluetun-state, mountPath: /gluetun-state, readOnly: true }
+            # webui-auth mounted as files too, not just env vars: s6-overlay
+            # launches custom-services.d scripts (port-sync) before the
+            # container's full environment is settled (confirmed live --
+            # the port-sync process's own /proc/<pid>/environ has no
+            # USER/PASS at all, even though init-transmission-config, which
+            # runs later, sees them fine). Files read fresh on every loop
+            # iteration sidestep the env-inheritance timing entirely.
+            - { name: webui-auth, mountPath: /run/secrets/webui-auth, readOnly: true }
           ports:
             - containerPort: 9091
           resources:
@@ -176,3 +184,6 @@ spec:
           configMap:
             name: transmission-port-sync
             defaultMode: 0755
+        - name: webui-auth
+          secret:
+            secretName: webui-auth
