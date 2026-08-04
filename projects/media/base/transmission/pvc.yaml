@@ -1,0 +1,15 @@
+# sqlite/settings.json config -- Longhorn, not NFS (locking risk, see
+# gitops-migration.md "Config storage vs the mobility rule"). elkton's live
+# config dir is 2.2M -- no sqlite-growth pattern like the *arr apps, so a
+# small volume is fine.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: transmission-config
+  namespace: media
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 1Gi

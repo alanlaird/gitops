@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: transmission
+  namespace: media
+  annotations:
+    metallb.io/loadBalancerIPs: "172.16.16.228"
+spec:
+  type: LoadBalancer
+  selector: { app: transmission }
+  ports:
+    - port: 9091
+      targetPort: 9091

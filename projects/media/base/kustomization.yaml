@@ -36,9 +36,13 @@ resources:
   - landing/index-configmap.yaml
   - landing/deployment.yaml
   - landing/service.yaml
+  - transmission/deployment.yaml
+  - transmission/service.yaml
+  - transmission/pvc.yaml
+  - transmission/port-sync-configmap.yaml
 
 generators:
   - secret-generator.yaml
 
-# All six *arr-family apps + Tubesync now migrated (see
+# All six *arr-family apps + Tubesync + Transmission now migrated (see
 # readme/gitops-migration.md Phase 5.5).

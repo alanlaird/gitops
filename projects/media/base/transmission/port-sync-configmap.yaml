@@ -1,0 +1,33 @@
+# Same port-sync loop as elkton (roles/media/files/transmission_port_sync.sh)
+# and the media-test prototype: Proton reissues the NAT-PMP forwarded port
+# ~every 90s, gluetun writes it to the shared status file, this pushes it
+# into transmission over RPC at a 20s cadence. Runs under the linuxserver
+# image's s6 supervisor via /custom-services.d.
+#
+# -n "$USER:$PASS" is the one real deviation from elkton's script: once
+# WebUI auth is on (see deployment.yaml), transmission-remote's own RPC
+# calls need credentials too, or they silently start 401ing and NAT-PMP
+# port sync stops working. USER/PASS are already env vars on this
+# container (needed for init-transmission-config); s6 custom services
+# inherit the container environment.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: transmission-port-sync
+  namespace: media
+data:
+  port-sync: |
+    #!/bin/bash
+    # --no-portmap: gluetun owns NAT-PMP against Proton; transmission's own
+    # port-mapping client must stay off or the two race for the mapping.
+    while true; do
+        port=$(cat /gluetun-state/forwarded_port 2>/dev/null)
+        if [ -n "$port" ]; then
+            current=$(transmission-remote 127.0.0.1:9091 -n "$USER:$PASS" --session-info 2>/dev/null \
+                | sed -n -E 's/.*Listen ?[Pp]ort: //p')
+            if [ "$port" != "$current" ]; then
+                transmission-remote 127.0.0.1:9091 -n "$USER:$PASS" --port "$port" --no-portmap
+            fi
+        fi
+        sleep 20
+    done

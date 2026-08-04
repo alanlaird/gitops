@@ -82,4 +82,29 @@ data:
     else:
         print("No SABnzbd download client found -- skipping")
 
+    # Transmission has no auth today (elkton), so its download-client entry
+    # has no username/password either -- both need to land together with
+    # the host repoint, or the client starts 401ing the moment Transmission's
+    # own WebUI auth turns on.
+    tr = next((c for c in clients if c["implementation"] == "Transmission"), None)
+    if tr:
+        changed = False
+        for f in tr["fields"]:
+            if f["name"] == "host" and f["value"] != "transmission.laird.net":
+                f["value"] = "transmission.laird.net"
+                changed = True
+            if f["name"] == "username" and f["value"] != os.environ["WEBUI_USERNAME"]:
+                f["value"] = os.environ["WEBUI_USERNAME"]
+                changed = True
+        if changed:
+            for f in tr["fields"]:
+                if f["name"] == "password":
+                    f["value"] = os.environ["WEBUI_PASSWORD"]
+            call("PUT", f"/downloadclient/{tr['id']}", tr)
+            print("Updated Transmission download client")
+        else:
+            print("Transmission download client already correct")
+    else:
+        print("No Transmission download client found -- skipping")
+
     print("Reconcile complete.")

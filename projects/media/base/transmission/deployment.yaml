@@ -1,0 +1,162 @@
+# Migrated from elkton's podman pet (roles/media/tasks/transmission.yml).
+# Adapts the validated terraform/taloshw/k8s/media-test/ prototype
+# (transmission+gluetun behind ProtonVPN) into production: drops the
+# prototype's throwaway Prowlarr (the real one already lives in
+# projects/media/base/prowlarr/), and adds the mergerfs sidecar for RW
+# /pool instead of depending on fir's NFS export of its own already-merged
+# /pool (elkton's current setup) -- fir is being progressively
+# decommissioned, this app shouldn't depend on it.
+#
+# All 4 containers share the pod network namespace, so gluetun's
+# default-deny firewall governs egress for all of them: traffic leaves
+# through the Proton tunnel or not at all, fail-closed, including the
+# window before the first WireGuard handshake.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: transmission
+  namespace: media
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate # RWO Longhorn config volume; also required by the gluetun
+    # stale-wg-rule postStart fix below (see gluetun container)
+  selector:
+    matchLabels: { app: transmission }
+  template:
+    metadata:
+      labels: { app: transmission }
+    spec:
+      containers:
+        - name: mergerfs
+          image: alpine:edge
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -euo pipefail
+              echo "@testing http://dl-cdn.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories
+              # gluetun's firewall is fail-closed from the moment it starts
+              # applying rules, before the first WireGuard handshake -- and
+              # container start order isn't guaranteed. If gluetun wins the
+              # race, this fetch can hang/fail; retry instead of relying on
+              # ordering (every mergerfs sidecar before this one has run
+              # with unrestricted egress, so this is new).
+              until apk add --no-cache fuse3 mergerfs@testing; do
+                echo "apk add failed (gluetun tunnel not up yet?) -- retrying in 3s"
+                sleep 3
+              done
+              exec mergerfs -f \
+                -o allow_other,use_ino,cache.files=partial,dropcacheonclose=true,category.create=mfs,minfreespace=20G \
+                /branches/media1:/branches/media2:/branches/media3:/branches/media4:/branches/media5:/branches/media6:/branches/media7 \
+                /pool
+          securityContext:
+            privileged: true # Bidirectional propagation requires this
+          volumeMounts:
+            - { name: media1, mountPath: /branches/media1 }
+            - { name: media2, mountPath: /branches/media2 }
+            - { name: media3, mountPath: /branches/media3 }
+            - { name: media4, mountPath: /branches/media4 }
+            - { name: media5, mountPath: /branches/media5 }
+            - { name: media6, mountPath: /branches/media6 }
+            - { name: media7, mountPath: /branches/media7 }
+            - { name: fuse, mountPath: /dev/fuse }
+            - { name: pool, mountPath: /pool, mountPropagation: Bidirectional }
+
+        - name: gluetun
+          # :latest, not :v3 -- v3.41.1 (Feb 2026) renews Proton's NAT-PMP
+          # mapping too late, so the forwarded port churns every ~90s; fixed
+          # by qdm12/gluetun PR #3345 (May 2026), not yet in a tagged
+          # release. Repin once one exists.
+          image: docker.io/qmcgaw/gluetun:latest
+          securityContext:
+            capabilities:
+              add: [NET_ADMIN]
+          env:
+            - { name: TZ, value: "America/Phoenix" }
+            - { name: VPN_SERVICE_PROVIDER, value: protonvpn }
+            - { name: VPN_TYPE, value: wireguard }
+            - name: WIREGUARD_PRIVATE_KEY
+              valueFrom: { secretKeyRef: { name: proton-wireguard, key: WIREGUARD_PRIVATE_KEY } }
+            - name: WIREGUARD_ADDRESSES
+              valueFrom: { secretKeyRef: { name: proton-wireguard, key: WIREGUARD_ADDRESSES } }
+            # Pin a specific server: pool nodes rotate their exit IP every
+            # ~90s, which resets the NAT-PMP mapping mid-session. node-nl-309
+            # (NL#843) keeps a stable exit IP.
+            - { name: SERVER_HOSTNAMES, value: node-nl-309.protonvpn.net }
+            - { name: PORT_FORWARD_ONLY, value: "on" }
+            - { name: VPN_PORT_FORWARDING, value: "on" }
+            - { name: VPN_PORT_FORWARDING_STATUS_FILE, value: /gluetun/forwarded_port }
+            # WebUI (transmission 9091) reachable via the pod/LB IP; every
+            # other inbound stays shut
+            - { name: FIREWALL_INPUT_PORTS, value: "9091" }
+          volumeMounts:
+            - { name: gluetun-state, mountPath: /gluetun }
+            - { name: dev-net-tun, mountPath: /dev/net/tun }
+          # The pod netns outlives the gluetun container (unlike podman), so
+          # gluetun's wg fwmark ip rules (table 51820) survive a container
+          # restart. On the next start the re-add fails with `netlink
+          # receive: file exists`, the tunnel never comes up, the
+          # healthcheck kills gluetun, and it crash-loops forever. Clear the
+          # stale rules on every (re)start. Pairs with strategy.type:
+          # Recreate above. K8s-specific -- doesn't exist in the podman
+          # version at all.
+          # https://github.com/qdm12/gluetun-wiki/blob/main/setup/advanced/kubernetes.md#adding-ipv6-rule--file-exists
+          lifecycle:
+            postStart:
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - "(ip rule del table 51820; ip -6 rule del table 51820) || true"
+          livenessProbe:
+            exec:
+              command: [/gluetun-entrypoint, healthcheck]
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+
+        - name: transmission
+          image: lscr.io/linuxserver/transmission:latest
+          env:
+            - { name: PUID, value: "1098" }
+            - { name: PGID, value: "1098" } # elkton used 1000/1000 -- align to fleet standard
+            - { name: TZ, value: "America/Phoenix" }
+            # linuxserver's init-transmission-config service reads these on
+            # every start and writes rpc-username/rpc-password into
+            # settings.json -- fully declarative WebUI auth, no reconcile
+            # CronJob needed (unlike the *arr apps).
+            - name: USER
+              valueFrom: { secretKeyRef: { name: webui-auth, key: username } }
+            - name: PASS
+              valueFrom: { secretKeyRef: { name: webui-auth, key: password } }
+          volumeMounts:
+            - { name: config, mountPath: /config }
+            - { name: pool, mountPath: /pool, mountPropagation: HostToContainer }
+            - { name: port-sync, mountPath: /custom-services.d }
+            - { name: gluetun-state, mountPath: /gluetun-state, readOnly: true }
+          ports:
+            - containerPort: 9091
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+
+      volumes:
+        - { name: media1, persistentVolumeClaim: { claimName: media1 } }
+        - { name: media2, persistentVolumeClaim: { claimName: media2 } }
+        - { name: media3, persistentVolumeClaim: { claimName: media3 } }
+        - { name: media4, persistentVolumeClaim: { claimName: media4 } }
+        - { name: media5, persistentVolumeClaim: { claimName: media5 } }
+        - { name: media6, persistentVolumeClaim: { claimName: media6 } }
+        - { name: media7, persistentVolumeClaim: { claimName: media7 } }
+        - { name: fuse, hostPath: { path: /dev/fuse, type: CharDevice } }
+        - { name: pool, emptyDir: {} }
+        - { name: gluetun-state, emptyDir: {} }
+        - { name: dev-net-tun, hostPath: { path: /dev/net/tun, type: CharDevice } }
+        - name: config
+          persistentVolumeClaim: { claimName: transmission-config }
+        - name: port-sync
+          configMap:
+            name: transmission-port-sync
+            defaultMode: 0755
