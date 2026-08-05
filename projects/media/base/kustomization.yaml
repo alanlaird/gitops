@@ -33,9 +33,9 @@ resources:
   - bazarr/pvc.yaml
   - bazarr-reconcile/script-configmap.yaml
   - bazarr-reconcile/cronjob.yaml
-  - landing/index-configmap.yaml
-  - landing/deployment.yaml
-  - landing/service.yaml
+  - homepage/configmap.yaml
+  - homepage/deployment.yaml
+  - homepage/service.yaml
   - transmission/deployment.yaml
   - transmission/service.yaml
   - transmission/pvc.yaml

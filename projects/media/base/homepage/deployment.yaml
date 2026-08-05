@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: homepage
+  namespace: media
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+  selector:
+    matchLabels: { app: homepage }
+  template:
+    metadata:
+      labels: { app: homepage }
+    spec:
+      containers:
+        - name: homepage
+          image: ghcr.io/gethomepage/homepage:latest
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            seccompProfile: { type: RuntimeDefault }
+          env:
+            - name: MY_POD_IP
+              valueFrom: { fieldRef: { fieldPath: status.podIP } }
+            # value before the comma is required for the k8s probe -- see gethomepage.dev/installation/#homepage_allowed_hosts
+            - { name: HOMEPAGE_ALLOWED_HOSTS, value: "$(MY_POD_IP):3000,media.laird.net" }
+          ports:
+            - { name: http, containerPort: 3000 }
+          livenessProbe:
+            httpGet: { path: /api/healthcheck, port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          volumeMounts:
+            - { name: config, mountPath: /app/config/settings.yaml, subPath: settings.yaml }
+            - { name: config, mountPath: /app/config/bookmarks.yaml, subPath: bookmarks.yaml }
+            - { name: config, mountPath: /app/config/widgets.yaml, subPath: widgets.yaml }
+            - { name: config, mountPath: /app/config/docker.yaml, subPath: docker.yaml }
+            - { name: config, mountPath: /app/config/services.yaml, subPath: services.yaml }
+            - { name: config, mountPath: /app/config/custom.css, subPath: custom.css }
+            - { name: config, mountPath: /app/config/custom.js, subPath: custom.js }
+            - { name: logs, mountPath: /app/config/logs }
+      volumes:
+        - { name: config, configMap: { name: homepage-config } }
+        - { name: logs, emptyDir: {} }

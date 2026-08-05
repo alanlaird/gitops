@@ -1,13 +1,13 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: media-landing
+  name: homepage
   namespace: media
   annotations:
     metallb.io/loadBalancerIPs: "172.16.16.227"
 spec:
   type: LoadBalancer
-  selector: { app: media-landing }
+  selector: { app: homepage }
   ports:
     - port: 80
-      targetPort: 80
+      targetPort: http
