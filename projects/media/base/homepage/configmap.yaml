@@ -19,6 +19,12 @@ data:
 
   widgets.yaml: ""
 
+  # Present but empty -- not enabling cluster auto-discovery (no RBAC
+  # granted for it), just avoids the entrypoint's copy-on-missing step,
+  # which needs a writable /app/config that our non-root securityContext
+  # doesn't allow (EACCES, crash-loops).
+  kubernetes.yaml: ""
+
   docker.yaml: ""
 
   custom.css: ""
