@@ -1,9 +1,11 @@
 # Replaces the hand-rolled caddy+static-HTML landing page (landing/) with
 # gethomepage.dev -- same "no build step, edit the ConfigMap and roll the
 # pod" operating model, but with a real upstream handling per-app API
-# integrations instead of us hand-rolling status polling. Starting minimal
-# (plain links only, matching the old page) -- widgets get added
-# per-service later.
+# integrations instead of us hand-rolling status polling. Radarr/Sonarr/
+# SABnzbd/Prowlarr widgets read their API keys via {{HOMEPAGE_FILE_*}},
+# populated from the same *-secrets Secrets the reconcile CronJobs use
+# (see deployment.yaml's volumeMounts) -- no keys live in this file.
+# Plex/Tautulli widgets and the network-traffic gauge are a later pass.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -40,18 +42,37 @@ data:
         - Radarr:
             href: http://radarr.laird.net:7878
             description: Movie management (taloshw k8s)
+            widget:
+              type: radarr
+              url: http://radarr.laird.net:7878
+              key: "{{HOMEPAGE_FILE_RADARR_KEY}}"
+              fields: ["movies", "missing", "queued"]
 
         - Sonarr:
             href: http://sonarr.laird.net:8989
             description: TV management (taloshw k8s)
+            widget:
+              type: sonarr
+              url: http://sonarr.laird.net:8989
+              key: "{{HOMEPAGE_FILE_SONARR_KEY}}"
+              fields: ["series", "wanted", "queued"]
 
         - SABnzbd:
             href: http://sabnzbd.laird.net:8080
             description: Usenet downloader (taloshw k8s)
+            widget:
+              type: sabnzbd
+              url: http://sabnzbd.laird.net:8080
+              key: "{{HOMEPAGE_FILE_SABNZBD_KEY}}"
 
         - Prowlarr:
             href: http://prowlarr.laird.net:9696
             description: Indexer management (taloshw k8s)
+            widget:
+              type: prowlarr
+              url: http://prowlarr.laird.net:9696
+              key: "{{HOMEPAGE_FILE_PROWLARR_KEY}}"
+              fields: ["numberOfGrabs", "numberOfQueries"]
 
         - Bazarr:
             href: http://bazarr.laird.net:6767
