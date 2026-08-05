@@ -13,9 +13,32 @@ spec:
     metadata:
       labels: { app: homepage }
     spec:
+      # fsGroup makes the emptyDir below group-writable by uid 1000 (the
+      # app's own user) -- needed so the initContainer (root) and the app
+      # container (non-root) can both write into it.
+      securityContext:
+        fsGroup: 1000
+      initContainers:
+        # Homepage's entrypoint auto-creates any of its known config files
+        # that's missing on disk by copying a built-in default -- and it
+        # gains new required files across releases (hit this twice on
+        # :latest: kubernetes.yaml, then proxmox.yaml on a later pull).
+        # Seeding a writable emptyDir from our ConfigMap, instead of
+        # subPath-mounting a fixed filename list off a read-only
+        # ConfigMap, means any future new file just gets auto-created
+        # instead of crash-looping on EACCES.
+        - name: seed-config
+          image: busybox:latest
+          command: ["sh", "-c", "cp -L /src/*.yaml /src/custom.* /config/ 2>/dev/null; true"]
+          volumeMounts:
+            - { name: config-src, mountPath: /src }
+            - { name: config, mountPath: /config }
       containers:
         - name: homepage
-          image: ghcr.io/gethomepage/homepage:latest
+          # Pinned to the digest already validated working (as of the
+          # fix above) instead of :latest -- avoids another silent
+          # mid-session upstream surprise; bump deliberately.
+          image: ghcr.io/gethomepage/homepage@sha256:a0b71c8e757298d02560186bab9fbe3fc2d375c523a62cc1019177b37e48aa28
           securityContext:
             allowPrivilegeEscalation: false
             capabilities: { drop: [ALL] }
@@ -46,15 +69,7 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 15
           volumeMounts:
-            - { name: config, mountPath: /app/config/settings.yaml, subPath: settings.yaml }
-            - { name: config, mountPath: /app/config/bookmarks.yaml, subPath: bookmarks.yaml }
-            - { name: config, mountPath: /app/config/widgets.yaml, subPath: widgets.yaml }
-            - { name: config, mountPath: /app/config/docker.yaml, subPath: docker.yaml }
-            - { name: config, mountPath: /app/config/kubernetes.yaml, subPath: kubernetes.yaml }
-            - { name: config, mountPath: /app/config/services.yaml, subPath: services.yaml }
-            - { name: config, mountPath: /app/config/custom.css, subPath: custom.css }
-            - { name: config, mountPath: /app/config/custom.js, subPath: custom.js }
-            - { name: logs, mountPath: /app/config/logs }
+            - { name: config, mountPath: /app/config }
             - { name: radarr-secrets, mountPath: /run/secrets/radarr, readOnly: true }
             - { name: sonarr-secrets, mountPath: /run/secrets/sonarr, readOnly: true }
             - { name: sabnzbd-secrets, mountPath: /run/secrets/sabnzbd, readOnly: true }
@@ -63,8 +78,8 @@ spec:
             - { name: tautulli-secrets, mountPath: /run/secrets/tautulli, readOnly: true }
             - { name: webui-auth, mountPath: /run/secrets/webui-auth, readOnly: true }
       volumes:
-        - { name: config, configMap: { name: homepage-config } }
-        - { name: logs, emptyDir: {} }
+        - { name: config-src, configMap: { name: homepage-config } }
+        - { name: config, emptyDir: {} }
         - { name: radarr-secrets, secret: { secretName: radarr-secrets } }
         - { name: sonarr-secrets, secret: { secretName: sonarr-secrets } }
         - { name: sabnzbd-secrets, secret: { secretName: sabnzbd-secrets } }
