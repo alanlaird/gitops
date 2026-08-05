@@ -35,6 +35,10 @@ spec:
             - { name: HOMEPAGE_FILE_SONARR_KEY, value: /run/secrets/sonarr/api_key }
             - { name: HOMEPAGE_FILE_SABNZBD_KEY, value: /run/secrets/sabnzbd/api_key }
             - { name: HOMEPAGE_FILE_PROWLARR_KEY, value: /run/secrets/prowlarr/api_key }
+            - { name: HOMEPAGE_FILE_PLEX_KEY, value: /run/secrets/plex/token }
+            - { name: HOMEPAGE_FILE_TAUTULLI_KEY, value: /run/secrets/tautulli/api_key }
+            - { name: HOMEPAGE_FILE_TRANSMISSION_USER, value: /run/secrets/webui-auth/username }
+            - { name: HOMEPAGE_FILE_TRANSMISSION_PASS, value: /run/secrets/webui-auth/password }
           ports:
             - { name: http, containerPort: 3000 }
           livenessProbe:
@@ -55,6 +59,9 @@ spec:
             - { name: sonarr-secrets, mountPath: /run/secrets/sonarr, readOnly: true }
             - { name: sabnzbd-secrets, mountPath: /run/secrets/sabnzbd, readOnly: true }
             - { name: prowlarr-secrets, mountPath: /run/secrets/prowlarr, readOnly: true }
+            - { name: plex-secrets, mountPath: /run/secrets/plex, readOnly: true }
+            - { name: tautulli-secrets, mountPath: /run/secrets/tautulli, readOnly: true }
+            - { name: webui-auth, mountPath: /run/secrets/webui-auth, readOnly: true }
       volumes:
         - { name: config, configMap: { name: homepage-config } }
         - { name: logs, emptyDir: {} }
@@ -62,3 +69,6 @@ spec:
         - { name: sonarr-secrets, secret: { secretName: sonarr-secrets } }
         - { name: sabnzbd-secrets, secret: { secretName: sabnzbd-secrets } }
         - { name: prowlarr-secrets, secret: { secretName: prowlarr-secrets } }
+        - { name: plex-secrets, secret: { secretName: plex-secrets } }
+        - { name: tautulli-secrets, secret: { secretName: tautulli-secrets } }
+        - { name: webui-auth, secret: { secretName: webui-auth } }

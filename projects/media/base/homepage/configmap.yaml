@@ -1,11 +1,17 @@
 # Replaces the hand-rolled caddy+static-HTML landing page (landing/) with
 # gethomepage.dev -- same "no build step, edit the ConfigMap and roll the
 # pod" operating model, but with a real upstream handling per-app API
-# integrations instead of us hand-rolling status polling. Radarr/Sonarr/
-# SABnzbd/Prowlarr widgets read their API keys via {{HOMEPAGE_FILE_*}},
-# populated from the same *-secrets Secrets the reconcile CronJobs use
-# (see deployment.yaml's volumeMounts) -- no keys live in this file.
-# Plex/Tautulli widgets and the network-traffic gauge are a later pass.
+# integrations instead of us hand-rolling status polling. All widget keys
+# read via {{HOMEPAGE_FILE_*}} (see deployment.yaml's volumeMounts) -- no
+# keys live in this file. Plex/Tautulli get their own secrets
+# (secrets/plex.sops.yaml, secrets/tautulli.sops.yaml); Transmission
+# reuses the shared webui-auth secret its own container already uses.
+#
+# No real network-traffic gauge yet -- taloshw isn't scraped by either
+# o11y tier (myrtle covers KVM/off-cluster hosts, talos4 covers itself
+# only, see readme/o11y.md), so there's no Prometheus/VictoriaMetrics
+# source to query from here. Transmission's widget (below) covers actual
+# download/upload throughput for the media pipeline in the meantime.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -38,6 +44,11 @@ data:
         - Plex:
             href: http://arago.laird.net:32400
             description: Media server (arago)
+            widget:
+              type: plex
+              url: http://arago.laird.net:32400
+              key: "{{HOMEPAGE_FILE_PLEX_KEY}}"
+              fields: ["streams", "movies", "tv"]
 
         - Radarr:
             href: http://radarr.laird.net:7878
@@ -85,10 +96,19 @@ data:
         - Transmission:
             href: http://transmission.laird.net:9091
             description: BitTorrent client (taloshw k8s)
+            widget:
+              type: transmission
+              url: http://transmission.laird.net:9091
+              username: "{{HOMEPAGE_FILE_TRANSMISSION_USER}}"
+              password: "{{HOMEPAGE_FILE_TRANSMISSION_PASS}}"
 
         - Tautulli:
             href: http://arago.laird.net:8181
             description: Plex analytics (arago)
+            widget:
+              type: tautulli
+              url: http://arago.laird.net:8181
+              key: "{{HOMEPAGE_FILE_TAUTULLI_KEY}}"
 
         - Seerr:
             href: http://fir:5055
